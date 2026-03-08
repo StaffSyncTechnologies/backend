@@ -626,7 +626,9 @@ export class SubscriptionController {
     }
 
     try {
-      const event = stripeService.verifyWebhookSignature(req.body, signature);
+      // Use the raw body from the request (provided by raw middleware)
+      const rawBody = req.body;
+      const event = stripeService.verifyWebhookSignature(rawBody, signature);
       if (!event) throw new AppError('Failed to verify webhook signature', 400);
       await stripeService.handleWebhookEvent(event);
 

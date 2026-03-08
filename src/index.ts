@@ -30,7 +30,7 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   'http://127.0.0.1:51180',
   process.env.CORS_ORIGIN,
-  process.env.FRONTEND_URL,
+  process.env.FRONTEND_URL
 ].filter(Boolean) as string[];
 
 app.use(cors({
@@ -50,6 +50,11 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }));
 app.use(morgan('dev'));
+
+// Webhook route must be before express.json() to get raw body
+import { webhookRouter } from './routes/subscription.routes';
+app.use('/api/v1/subscriptions', webhookRouter);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

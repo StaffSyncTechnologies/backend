@@ -3,14 +3,16 @@ import { SubscriptionController } from '../controllers/subscription.controller';
 import { authenticate, authorizeAdmin } from '../middleware/auth';
 import { asyncHandler } from '../utils/asyncHandler';
 
+// Create separate routers
 const router = Router();
+const webhookRouter = Router();
 const controller = new SubscriptionController();
 
 // Public routes
 router.get('/plans', asyncHandler(controller.getPlans));
 
-// Webhook (needs raw body for signature verification)
-router.post(
+// Webhook-only router (for early registration before body parsing)
+webhookRouter.post(
   '/webhook',
   raw({ type: 'application/json' }),
   asyncHandler(controller.handleWebhook)
@@ -67,4 +69,6 @@ router.post('/setup-intent', asyncHandler(controller.createSetupIntent));
 // Request enterprise plan (contact us)
 router.post('/enterprise-request', asyncHandler(controller.requestEnterprisePlan));
 
+// Export both routers
+export { webhookRouter };
 export default router;
