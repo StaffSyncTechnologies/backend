@@ -282,6 +282,7 @@ export class OnboardingController {
             organizationId: req.user!.organizationId,
             fullName: member.fullName || member.email.split('@')[0],
             email: member.email,
+            passwordHash: '',
             phone: member.phone,
             role: member.role,
             inviteToken,

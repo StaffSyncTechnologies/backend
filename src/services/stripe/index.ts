@@ -16,7 +16,7 @@ import { SubscriptionNotificationService } from '../notifications/subscription.n
 // Initialize Stripe only if key is provided
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const stripe = STRIPE_SECRET_KEY 
-  ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2024-12-18.acacia' })
+  ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2026-01-28.clover' as any })
   : null;
 
 const isStripeConfigured = (): boolean => {
@@ -195,10 +195,10 @@ class StripeService {
     // Attach payment method if provided
     if (input.paymentMethodId) {
       await stripe.paymentMethods.attach(input.paymentMethodId, {
-        customer: customerId,
+        customer: customerId!,
       });
 
-      await stripe.customers.update(customerId, {
+      await stripe.customers.update(customerId!, {
         invoice_settings: {
           default_payment_method: input.paymentMethodId,
         },
@@ -207,8 +207,8 @@ class StripeService {
 
     // Create subscription
     const subscriptionParams: Stripe.SubscriptionCreateParams = {
-      customer: customerId,
-      items: [{ price: priceId }],
+      customer: customerId!,
+      items: [{ price: priceId as string }],
       payment_behavior: 'default_incomplete',
       payment_settings: {
         save_default_payment_method: 'on_subscription',
@@ -230,8 +230,8 @@ class StripeService {
     // Get client secret for payment confirmation
     let clientSecret: string | undefined;
     const latestInvoice = subscription.latest_invoice as Stripe.Invoice;
-    if (latestInvoice?.payment_intent) {
-      const paymentIntent = latestInvoice.payment_intent as Stripe.PaymentIntent;
+    if ((latestInvoice as any)?.payment_intent) {
+      const paymentIntent = (latestInvoice as any).payment_intent as Stripe.PaymentIntent;
       clientSecret = paymentIntent.client_secret || undefined;
     }
 
@@ -245,6 +245,8 @@ class StripeService {
    * Update an existing subscription
    */
   async updateSubscription(input: UpdateSubscriptionInput): Promise<Stripe.Subscription> {
+    if (!isStripeConfigured() || !stripe) throw new Error('Stripe not configured');
+
     const dbSubscription = await prisma.subscription.findFirst({
       where: { stripeSubscriptionId: input.subscriptionId },
     });
@@ -266,7 +268,7 @@ class StripeService {
       const itemId = currentSub.items.data[0]?.id;
 
       if (itemId) {
-        updateParams.items = [{ id: itemId, price: priceId }];
+        updateParams.items = [{ id: itemId, price: priceId as string }];
         updateParams.proration_behavior = 'create_prorations';
       }
     }
@@ -288,6 +290,8 @@ class StripeService {
    * Cancel a subscription immediately
    */
   async cancelSubscription(subscriptionId: string, immediately: boolean = false): Promise<Stripe.Subscription> {
+    if (!isStripeConfigured() || !stripe) throw new Error('Stripe not configured');
+
     const dbSubscription = await prisma.subscription.findFirst({
       where: { stripeSubscriptionId: subscriptionId },
     });
@@ -316,6 +320,8 @@ class StripeService {
    * Resume a canceled subscription
    */
   async resumeSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
+    if (!isStripeConfigured() || !stripe) throw new Error('Stripe not configured');
+
     const subscription = await stripe.subscriptions.update(subscriptionId, {
       cancel_at_period_end: false,
     });
@@ -341,14 +347,16 @@ class StripeService {
     successUrl: string,
     cancelUrl: string
   ): Promise<Stripe.Checkout.Session> {
+    if (!isStripeConfigured() || !stripe) throw new Error('Stripe not configured');
+
     const plan = PLANS[planTier];
     const priceId = billingCycle === 'yearly' ? plan.yearlyPriceId : plan.monthlyPriceId;
     const customerId = await this.getOrCreateCustomer(organizationId);
 
     const session = await stripe.checkout.sessions.create({
-      customer: customerId,
+      customer: customerId!,
       mode: 'subscription',
-      line_items: [{ price: priceId, quantity: 1 }],
+      line_items: [{ price: priceId as string, quantity: 1 }],
       success_url: successUrl,
       cancel_url: cancelUrl,
       subscription_data: {
@@ -382,6 +390,8 @@ class StripeService {
       throw new Error('No subscription found for this organization');
     }
 
+    if (!isStripeConfigured() || !stripe) throw new Error('Stripe not configured');
+
     const session = await stripe.billingPortal.sessions.create({
       customer: subscription.stripeCustomerId,
       return_url: returnUrl,
@@ -394,6 +404,8 @@ class StripeService {
    * Get subscription details
    */
   async getSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
+    if (!isStripeConfigured() || !stripe) throw new Error('Stripe not configured');
+
     return stripe.subscriptions.retrieve(subscriptionId, {
       expand: ['latest_invoice', 'default_payment_method'],
     });
@@ -403,6 +415,8 @@ class StripeService {
    * Get payment methods for a customer
    */
   async getPaymentMethods(customerId: string): Promise<Stripe.PaymentMethod[]> {
+    if (!isStripeConfigured() || !stripe) throw new Error('Stripe not configured');
+
     const paymentMethods = await stripe.paymentMethods.list({
       customer: customerId,
       type: 'card',
@@ -415,10 +429,12 @@ class StripeService {
    * Create a setup intent for adding a payment method
    */
   async createSetupIntent(organizationId: string): Promise<Stripe.SetupIntent> {
+    if (!isStripeConfigured() || !stripe) throw new Error('Stripe not configured');
+
     const customerId = await this.getOrCreateCustomer(organizationId);
 
     const setupIntent = await stripe.setupIntents.create({
-      customer: customerId,
+      customer: customerId!,
       payment_method_types: ['card'],
     });
 
@@ -429,6 +445,8 @@ class StripeService {
    * Get invoices for an organization
    */
   async getInvoices(customerId: string, limit: number = 10): Promise<Stripe.Invoice[]> {
+    if (!isStripeConfigured() || !stripe) throw new Error('Stripe not configured');
+
     const invoices = await stripe.invoices.list({
       customer: customerId,
       limit,
@@ -460,8 +478,8 @@ class StripeService {
         status,
         workerLimit: plan.workerLimit,
         clientLimit: plan.clientLimit,
-        currentPeriodStart: new Date(stripeSubscription.current_period_start * 1000),
-        currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
+        currentPeriodStart: new Date((stripeSubscription as any).current_period_start * 1000),
+        currentPeriodEnd: new Date((stripeSubscription as any).current_period_end * 1000),
         cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
         canceledAt: stripeSubscription.canceled_at
           ? new Date(stripeSubscription.canceled_at * 1000)
@@ -480,8 +498,8 @@ class StripeService {
         status,
         workerLimit: plan.workerLimit,
         clientLimit: plan.clientLimit,
-        currentPeriodStart: new Date(stripeSubscription.current_period_start * 1000),
-        currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
+        currentPeriodStart: new Date((stripeSubscription as any).current_period_start * 1000),
+        currentPeriodEnd: new Date((stripeSubscription as any).current_period_end * 1000),
         cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
         canceledAt: stripeSubscription.canceled_at
           ? new Date(stripeSubscription.canceled_at * 1000)
@@ -567,7 +585,7 @@ class StripeService {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
         const organizationId = session.metadata?.organizationId;
-        if (organizationId && session.subscription) {
+        if (organizationId && session.subscription && stripe) {
           // Fetch full subscription and sync
           const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
           await this.syncSubscriptionToDatabase(subscription, organizationId);
@@ -603,10 +621,11 @@ class StripeService {
    * Record a payment from invoice
    */
   private async recordPayment(invoice: Stripe.Invoice, status: string): Promise<void> {
-    if (!invoice.subscription) return;
+    const invoiceSubscription = (invoice as any).subscription;
+    if (!invoiceSubscription) return;
 
     const dbSubscription = await prisma.subscription.findFirst({
-      where: { stripeSubscriptionId: invoice.subscription as string },
+      where: { stripeSubscriptionId: invoiceSubscription as string },
     });
 
     if (!dbSubscription) return;
@@ -617,7 +636,7 @@ class StripeService {
         id: invoice.id,
         subscriptionId: dbSubscription.id,
         stripeInvoiceId: invoice.id,
-        stripePaymentIntentId: invoice.payment_intent as string,
+        stripePaymentIntentId: (invoice as any).payment_intent as string,
         amount: invoice.amount_paid / 100, // Convert from cents
         currency: invoice.currency,
         status,

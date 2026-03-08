@@ -25,7 +25,7 @@ router.post('/', authorizeOps, asyncHandler(clientController.createClient));
 router.get('/:clientId/details', asyncHandler(clientController.getClientDetails));
 router.put('/:clientId', authorizeOps, asyncHandler(clientController.updateClient));
 router.post('/:clientId/invoices/generate', authorizeOps, asyncHandler(clientController.generateClientInvoice));
-router.get('/invoices/:invoiceId', asyncHandler(clientController.getInvoiceDetails));
+router.get('/invoices/:invoiceId', asyncHandler(clientController.getAgencyInvoiceDetails));
 router.get('/invoices/:invoiceId/pdf', asyncHandler(clientController.downloadInvoicePDF));
 
 // ============================================================

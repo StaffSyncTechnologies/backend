@@ -861,7 +861,7 @@ export class AttendanceController {
     });
 
     // Calculate weekly data for each client
-    const weeklyData = [];
+    const weeklyData: Array<{ week: string; weekStart: string; weekEnd: string; clients: Record<string, { hours: number; workers: number }> }> = [];
     
     for (let i = 0; i < query.weeks; i++) {
       const weekStart = new Date(now);

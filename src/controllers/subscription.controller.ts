@@ -106,7 +106,7 @@ export class SubscriptionController {
       stripeDetails: stripeDetails ? {
         status: stripeDetails.status,
         cancelAtPeriodEnd: stripeDetails.cancel_at_period_end,
-        currentPeriodEnd: new Date(stripeDetails.current_period_end * 1000),
+        currentPeriodEnd: new Date((stripeDetails as any).current_period_end * 1000),
       } : null,
     });
   };
@@ -317,9 +317,9 @@ export class SubscriptionController {
     });
 
     ApiResponse.ok(res, 'Subscription created', {
-      subscriptionId: result.subscription.id,
-      status: result.subscription.status,
-      clientSecret: result.clientSecret,
+      subscriptionId: result!.subscription.id,
+      status: result!.subscription.status,
+      clientSecret: result!.clientSecret,
     });
   };
 
@@ -371,7 +371,7 @@ export class SubscriptionController {
 
     ApiResponse.ok(res, 'Subscription updated', {
       status: updated.status,
-      currentPeriodEnd: new Date(updated.current_period_end * 1000),
+      currentPeriodEnd: new Date((updated as any).current_period_end * 1000),
     });
   };
 
@@ -556,22 +556,22 @@ export class SubscriptionController {
     // Get all payments for this organization
     const [payments, totalCount] = await Promise.all([
       prisma.payment.findMany({
-        where: { organizationId },
+        where: { subscription: { organizationId } },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limitNum,
       }),
       prisma.payment.count({
-        where: { organizationId },
+        where: { subscription: { organizationId } },
       }),
     ]);
 
     // Map payments to history format
     const history = payments.map(payment => ({
       id: payment.id,
-      planType: payment.planTier || subscription?.planTier || 'FREE',
-      amount: `£${(payment.amount / 100).toFixed(2)}`,
-      billingCycle: payment.billingCycle || 'Annually',
+      planType: subscription?.planTier || 'FREE',
+      amount: `£${(Number(payment.amount) / 100).toFixed(2)}`,
+      billingCycle: 'Annually',
       date: payment.paidAt || payment.createdAt,
       transactionId: payment.stripePaymentIntentId || payment.id,
       status: this.mapPaymentStatus(payment.status),
@@ -628,6 +628,7 @@ export class SubscriptionController {
 
     try {
       const event = stripeService.verifyWebhookSignature(req.body, signature);
+      if (!event) throw new AppError('Failed to verify webhook signature', 400);
       await stripeService.handleWebhookEvent(event);
 
       res.json({ received: true });

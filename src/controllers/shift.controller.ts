@@ -40,7 +40,8 @@ export class ShiftController {
 
       if (!workerProfile || workerProfile.rtwStatus !== 'APPROVED') {
         // Worker doesn't have approved RTW - return empty list with message
-        return ApiResponse.ok(res, 'RTW verification required to view shifts', [], {
+        return ApiResponse.ok(res, 'RTW verification required to view shifts', {
+          shifts: [],
           rtwRequired: true,
           rtwStatus: workerProfile?.rtwStatus || 'NOT_STARTED',
         });

@@ -50,7 +50,7 @@ export const requireActiveSubscription = async (
     const { status, trialEnd, planTier } = subscription;
 
     // Check subscription status
-    const isTrialing = status === 'TRIALING' && trialEnd && now < trialEnd;
+    const isTrialing = status === 'TRIALING' && !!trialEnd && now < trialEnd;
     const isActive = status === 'ACTIVE';
     const isPastDue = status === 'PAST_DUE';
 
@@ -236,7 +236,7 @@ export const getSubscriptionStatus = async (
 
   const now = new Date();
   const { status, trialEnd, planTier } = subscription;
-  const isTrialing = status === 'TRIALING' && trialEnd && now < trialEnd;
+  const isTrialing = status === 'TRIALING' && !!trialEnd && now < trialEnd;
   const isActive = status === 'ACTIVE';
 
   return {

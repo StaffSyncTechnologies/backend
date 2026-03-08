@@ -82,7 +82,7 @@ export class UserController {
 
     const passwordHash = data.password 
       ? await bcrypt.hash(data.password, 12) 
-      : undefined;
+      : '';
 
     // Generate invite token if no password provided
     const inviteToken = !data.password ? crypto.randomBytes(32).toString('hex') : undefined;

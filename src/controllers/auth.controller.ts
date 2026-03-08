@@ -646,7 +646,7 @@ export class AuthController {
       where: {
         inviteToken: token,
         inviteExpiresAt: { gt: new Date() },
-        passwordHash: null,
+        passwordHash: '',
       },
       include: {
         organization: {
@@ -663,7 +663,7 @@ export class AuthController {
       email: user.email,
       fullName: user.fullName,
       role: user.role,
-      organization: user.organization,
+      organization: (user as any).organization,
     });
   };
 
@@ -683,7 +683,7 @@ export class AuthController {
       where: {
         inviteToken: token,
         inviteExpiresAt: { gt: new Date() },
-        passwordHash: null,
+        passwordHash: '',
       },
       include: { organization: true },
     });
@@ -769,7 +769,7 @@ export class AuthController {
       where: {
         id: userId,
         organizationId: req.user!.organizationId,
-        passwordHash: null,
+        passwordHash: '',
         role: { not: 'WORKER' },
       },
     });

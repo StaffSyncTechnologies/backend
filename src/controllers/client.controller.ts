@@ -1447,7 +1447,7 @@ export class ClientController {
    * Get invoice details (agency staff)
    * GET /api/clients/invoices/:invoiceId
    */
-  getInvoiceDetails = async (req: AuthRequest, res: Response) => {
+  getAgencyInvoiceDetails = async (req: AuthRequest, res: Response) => {
     const orgId = req.user!.organizationId;
     const { invoiceId } = req.params;
 
