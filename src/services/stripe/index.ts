@@ -12,11 +12,11 @@ import Stripe from 'stripe';
 import { prisma } from '../../lib/prisma';
 import { PlanTier, SubscriptionStatus } from '@prisma/client';
 import { SubscriptionNotificationService } from '../notifications/subscription.notification';
+import { config } from '../../config';
 
 // Initialize Stripe only if key is provided
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const stripe = STRIPE_SECRET_KEY 
-  ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2026-01-28.clover' as any })
+const stripe = config.stripe.secretKey 
+  ? new Stripe(config.stripe.secretKey, { apiVersion: '2026-01-28.clover' as any })
   : null;
 
 const isStripeConfigured = (): boolean => {
@@ -27,10 +27,10 @@ const isStripeConfigured = (): boolean => {
   return true;
 };
 
-// Trial duration in days
-export const FREE_TRIAL_DAYS = 180;
+// Trial duration from config
+export const FREE_TRIAL_DAYS = config.stripe.freeTrialDays;
 
-// Plan configuration
+// Plan configuration - all values driven from config
 export const PLANS = {
   FREE: {
     name: 'Free Trial',
@@ -39,8 +39,8 @@ export const PLANS = {
     monthlyPrice: 0,
     yearlyPrice: 0,
     trialDays: FREE_TRIAL_DAYS,
-    workerLimit: -1, // Unlimited during trial
-    clientLimit: -1, // Unlimited during trial
+    workerLimit: -1,
+    clientLimit: -1,
     features: [
       `${FREE_TRIAL_DAYS}-day free trial`,
       'Unlimited workers',
@@ -54,12 +54,12 @@ export const PLANS = {
   },
   STANDARD: {
     name: 'Standard',
-    monthlyPriceId: process.env.STRIPE_STANDARD_MONTHLY_PRICE_ID || 'price_standard_monthly',
-    yearlyPriceId: process.env.STRIPE_STANDARD_YEARLY_PRICE_ID || 'price_standard_yearly',
-    monthlyPrice: 500, // £500/month
-    yearlyPrice: 5000, // £5000/year (2 months free)
-    workerLimit: -1, // Unlimited
-    clientLimit: -1, // Unlimited
+    monthlyPriceId: config.stripe.plans.standard.monthlyPriceId,
+    yearlyPriceId: config.stripe.plans.standard.yearlyPriceId,
+    monthlyPrice: config.stripe.plans.standard.monthlyPrice,
+    yearlyPrice: config.stripe.plans.standard.yearlyPrice,
+    workerLimit: config.stripe.plans.standard.workerLimit,
+    clientLimit: config.stripe.plans.standard.clientLimit,
     features: [
       'Unlimited workers',
       'Unlimited clients',
@@ -74,12 +74,12 @@ export const PLANS = {
   },
   ENTERPRISE: {
     name: 'Enterprise',
-    monthlyPriceId: process.env.STRIPE_ENTERPRISE_MONTHLY_PRICE_ID || 'price_enterprise_custom',
-    yearlyPriceId: process.env.STRIPE_ENTERPRISE_YEARLY_PRICE_ID || 'price_enterprise_custom',
-    monthlyPrice: null, // Custom pricing - contact us
-    yearlyPrice: null, // Custom pricing - contact us
-    workerLimit: -1, // Unlimited
-    clientLimit: -1, // Unlimited
+    monthlyPriceId: config.stripe.plans.enterprise.monthlyPriceId,
+    yearlyPriceId: config.stripe.plans.enterprise.yearlyPriceId,
+    monthlyPrice: null,
+    yearlyPrice: null,
+    workerLimit: config.stripe.plans.enterprise.workerLimit,
+    clientLimit: config.stripe.plans.enterprise.clientLimit,
     isCustomPricing: true,
     features: [
       'Everything in Standard',
@@ -675,7 +675,7 @@ class StripeService {
    */
   verifyWebhookSignature(payload: string | Buffer, signature: string): Stripe.Event | null {
     if (!isStripeConfigured() || !stripe) return null;
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
+    const webhookSecret = config.stripe.webhookSecret;
     return stripe.webhooks.constructEvent(payload, signature, webhookSecret);
   }
 

@@ -38,6 +38,29 @@ export const config = {
     whatsappNumber: process.env.TWILIO_WHATSAPP_NUMBER || '',
   },
   
+  stripe: {
+    secretKey: process.env.STRIPE_SECRET_KEY || '',
+    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || '',
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
+    freeTrialDays: parseInt(process.env.FREE_TRIAL_DAYS || '180', 10),
+    plans: {
+      standard: {
+        monthlyPriceId: process.env.STRIPE_STANDARD_MONTHLY_PRICE_ID || '',
+        yearlyPriceId: process.env.STRIPE_STANDARD_YEARLY_PRICE_ID || '',
+        monthlyPrice: parseInt(process.env.STRIPE_STANDARD_MONTHLY_PRICE || '500', 10),   // £500/month (in pounds)
+        yearlyPrice: parseInt(process.env.STRIPE_STANDARD_YEARLY_PRICE || '5000', 10),     // £5000/year
+        workerLimit: parseInt(process.env.STRIPE_STANDARD_WORKER_LIMIT || '-1', 10),       // -1 = unlimited
+        clientLimit: parseInt(process.env.STRIPE_STANDARD_CLIENT_LIMIT || '-1', 10),
+      },
+      enterprise: {
+        monthlyPriceId: process.env.STRIPE_ENTERPRISE_MONTHLY_PRICE_ID || '',
+        yearlyPriceId: process.env.STRIPE_ENTERPRISE_YEARLY_PRICE_ID || '',
+        workerLimit: parseInt(process.env.STRIPE_ENTERPRISE_WORKER_LIMIT || '-1', 10),
+        clientLimit: parseInt(process.env.STRIPE_ENTERPRISE_CLIENT_LIMIT || '-1', 10),
+      },
+    },
+  },
+
   // UK Working Time Regulations defaults
   workingTime: {
     minRestHours: 11,

@@ -13,7 +13,7 @@ import { stripeService, PLANS, FREE_TRIAL_DAYS } from '../services/stripe';
 import { PlanTier } from '@prisma/client';
 import { SubscriptionNotificationService } from '../services/notifications/subscription.notification';
 import { SubscriptionChecker } from '../services/subscriptionChecker';
-
+import {config} from '../config'
 export class SubscriptionController {
   /**
    * Get available plans
@@ -620,7 +620,7 @@ export class SubscriptionController {
    * Handle Stripe webhook
    */
   handleWebhook = async (req: Request, res: Response) => {
-    const signature = req.headers['stripe-signature'] as string;
+   const signature = config.stripe.webhookSecret as string;
 
     if (!signature) {
       throw new AppError('Missing stripe-signature header', 400);
