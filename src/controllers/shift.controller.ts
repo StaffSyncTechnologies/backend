@@ -145,7 +145,31 @@ export class ShiftController {
       }
     }
 
-    ApiResponse.ok(res, 'Shift retrieved', shift);
+    // Add processed geofence data for mobile app (same logic as attendance controller)
+    const { config } = require('../config');
+    let siteLat: number | null = null;
+    let siteLng: number | null = null;
+    let geofenceRadius = config.attendance.defaultGeofenceRadius;
+
+    // Priority: Shift siteLat/siteLng > Location > Default
+    if (shift.siteLat && shift.siteLng) {
+      siteLat = Number(shift.siteLat);
+      siteLng = Number(shift.siteLng);
+    } else if (shift.location) {
+      siteLat = Number(shift.location.latitude);
+      siteLng = Number(shift.location.longitude);
+      geofenceRadius = shift.location.geofenceRadius || config.attendance.defaultGeofenceRadius;
+    }
+
+    // Add processed geofence data to response
+    const processedShift = {
+      ...shift,
+      siteLat,
+      siteLng,
+      geofenceRadius,
+    };
+
+    ApiResponse.ok(res, 'Shift retrieved', processedShift);
   };
 
   create = async (req: AuthRequest, res: Response) => {

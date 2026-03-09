@@ -1245,7 +1245,7 @@ export class WorkerController {
             startAt: true,
             endAt: true,
             siteLocation: true,
-            payRate: true,
+            hourlyRate: true,
             clientCompany: { select: { name: true } },
           },
         },
@@ -1276,7 +1276,7 @@ export class WorkerController {
         client: todayAssignment.shift.clientCompany?.name,
         startAt: todayAssignment.shift.startAt,
         endAt: todayAssignment.shift.endAt,
-        hourlyRate: todayAssignment.shift.payRate ? Number(todayAssignment.shift.payRate) : null,
+        hourlyRate: todayAssignment.shift.hourlyRate ? Number(todayAssignment.shift.hourlyRate) : null,
         startsIn: minutesUntilStart > 0 ? minutesUntilStart : null,
         status: attendance?.clockOutAt
           ? 'COMPLETED'
@@ -1305,7 +1305,7 @@ export class WorkerController {
             startAt: true,
             endAt: true,
             siteLocation: true,
-            payRate: true,
+            hourlyRate: true,
             clientCompany: { select: { name: true } },
           },
         },
@@ -1322,7 +1322,7 @@ export class WorkerController {
       client: a.shift.clientCompany?.name,
       startAt: a.shift.startAt,
       endAt: a.shift.endAt,
-      hourlyRate: a.shift.payRate ? Number(a.shift.payRate) : null,
+      hourlyRate: a.shift.hourlyRate ? Number(a.shift.hourlyRate) : null,
     }));
 
     // Get upcoming holidays (approved or pending, future start dates)
