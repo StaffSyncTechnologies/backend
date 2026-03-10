@@ -26,6 +26,7 @@ export class NearbyAgencyController {
       locations: {
         where: { isActive: true } as any,
         select: {
+          name: true,
           address: true,
           latitude: true,
           longitude: true,
@@ -49,11 +50,15 @@ export class NearbyAgencyController {
 
         const address = loc?.address || org.address || null;
 
-        // City filter — match against location address or org address
+        // City filter — match against any location address/name, org address, or org name
         if (city) {
-          const locAddr = (loc?.address || '').toLowerCase();
           const orgAddr = (org.address || '').toLowerCase();
-          if (!locAddr.includes(city) && !orgAddr.includes(city) && !org.name.toLowerCase().includes(city)) {
+          const orgName = org.name.toLowerCase();
+          const anyLocMatch = org.locations.some((l: any) =>
+            (l.address || '').toLowerCase().includes(city) ||
+            (l.name || '').toLowerCase().includes(city)
+          );
+          if (!anyLocMatch && !orgAddr.includes(city) && !orgName.includes(city)) {
             return null;
           }
         }
