@@ -7,9 +7,13 @@ import crypto from 'crypto';
 
 const updateOrgSchema = z.object({
   name: z.string().min(2).max(255).optional(),
-  registrationNumber: z.string().optional(),
-  vatNumber: z.string().optional(),
-  address: z.string().optional(),
+  tradingName: z.string().max(255).optional().nullable(),
+  registrationNumber: z.string().optional().nullable(),
+  vatNumber: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  industry: z.string().max(100).optional().nullable(),
+  website: z.string().max(500).optional().nullable(),
+  phone: z.string().max(50).optional().nullable(),
 });
 
 const brandingSchema = z.object({
