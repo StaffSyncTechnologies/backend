@@ -22,11 +22,13 @@ import clientAdminRoutes from './clientAdmin.routes';
 import workerMembershipRoutes from './workerMembership.routes';
 import complianceRoutes from './compliance.routes';
 import bankAccountRoutes from './bankAccount.routes';
+import nearbyAgencyRoutes from './nearbyAgency.routes';
 
 const router = Router();
 
 // Public routes
 router.use('/auth', authRoutes);
+router.use('/agencies', nearbyAgencyRoutes); // Public: nearby agencies for workers without invite code
 router.use('/client-registration', clientRegistrationRoutes); // Client company self-registration
 
 // Protected routes (Agency/Admin)
