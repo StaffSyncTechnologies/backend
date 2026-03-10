@@ -171,32 +171,41 @@ export class ShiftController {
 
     if (!shift) throw new NotFoundError('Shift');
 
-    // Workers can only view shifts they are assigned to, or from their manager's clients
+    // Workers can only view shifts they are assigned to, broadcast to them, or from their manager's clients
     if (req.user!.role === 'WORKER') {
-      // First check: is this worker directly assigned to this shift?
       const isAssigned = shift.assignments.some(a => a.worker.id === req.user!.id);
 
-      if (!isAssigned && shift.clientCompanyId) {
-        // Fallback: check manager-client relationship
-        const worker = await prisma.user.findUnique({
-          where: { id: req.user!.id },
-          select: { managerId: true },
+      if (!isAssigned) {
+        // Check if shift was broadcast to this worker
+        const isBroadcast = shift.broadcasts.some((b: any) => {
+          const targets: string[] = (b.filters as any)?.targetWorkerIds || [];
+          return targets.includes(req.user!.id);
         });
 
-        if (worker?.managerId) {
-          const managerHasClient = await prisma.staffCompanyAssignment.findFirst({
-            where: {
-              staffId: worker.managerId,
-              clientCompanyId: shift.clientCompanyId,
-              status: 'ACTIVE',
-            },
-          });
+        if (!isBroadcast) {
+          // Fallback: check manager-client relationship
+          let hasAccess = false;
+          if (shift.clientCompanyId) {
+            const worker = await prisma.user.findUnique({
+              where: { id: req.user!.id },
+              select: { managerId: true },
+            });
 
-          if (!managerHasClient) {
+            if (worker?.managerId) {
+              const managerHasClient = await prisma.staffCompanyAssignment.findFirst({
+                where: {
+                  staffId: worker.managerId,
+                  clientCompanyId: shift.clientCompanyId,
+                  status: 'ACTIVE',
+                },
+              });
+              hasAccess = !!managerHasClient;
+            }
+          }
+
+          if (!hasAccess) {
             throw new AppError('You do not have access to this shift', 403, 'ACCESS_DENIED');
           }
-        } else {
-          throw new AppError('You do not have access to this shift', 403, 'ACCESS_DENIED');
         }
       }
     }
