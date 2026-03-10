@@ -1294,7 +1294,7 @@ export class WorkerController {
       };
     }
 
-    // Get next upcoming shifts (excluding today)
+    // Get next upcoming assigned shifts (excluding today)
     const upcomingShifts = await prisma.shiftAssignment.findMany({
       where: {
         workerId,
@@ -1320,16 +1320,78 @@ export class WorkerController {
       take: 5,
     });
 
-    // Format upcoming shifts
-    const nextShifts = upcomingShifts.map(a => ({
-      id: a.shift.id,
-      title: a.shift.title,
-      location: a.shift.siteLocation,
-      client: a.shift.clientCompany?.name,
-      startAt: a.shift.startAt,
-      endAt: a.shift.endAt,
-      hourlyRate: a.shift.hourlyRate ? Number(a.shift.hourlyRate) : null,
-    }));
+    // Also get broadcast shifts available to this worker
+    const broadcasts = await prisma.shiftBroadcast.findMany({
+      where: {
+        shift: {
+          organizationId: req.user!.organizationId,
+          startAt: { gt: endOfToday },
+        },
+        status: 'OPEN',
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gt: now } },
+        ],
+      },
+      select: { shiftId: true, filters: true },
+    });
+
+    const broadcastShiftIds = broadcasts
+      .filter((b) => {
+        const targets: string[] = (b.filters as any)?.targetWorkerIds || [];
+        return targets.includes(workerId);
+      })
+      .map((b) => b.shiftId);
+
+    // Exclude shifts already assigned to this worker
+    const assignedShiftIds = upcomingShifts.map((a) => a.shiftId);
+    const newBroadcastIds = broadcastShiftIds.filter((id) => !assignedShiftIds.includes(id));
+
+    let broadcastShifts: any[] = [];
+    if (newBroadcastIds.length > 0) {
+      broadcastShifts = await prisma.shift.findMany({
+        where: { id: { in: newBroadcastIds } },
+        select: {
+          id: true,
+          title: true,
+          startAt: true,
+          endAt: true,
+          siteLocation: true,
+          hourlyRate: true,
+          clientCompany: { select: { name: true } },
+        },
+        orderBy: { startAt: 'asc' },
+        take: 5,
+      });
+    }
+
+    // Merge assigned + broadcast shifts, sorted by startAt, max 5
+    const allUpcoming = [
+      ...upcomingShifts.map((a) => ({
+        id: a.shift.id,
+        title: a.shift.title,
+        location: a.shift.siteLocation,
+        client: a.shift.clientCompany?.name,
+        startAt: a.shift.startAt,
+        endAt: a.shift.endAt,
+        hourlyRate: a.shift.hourlyRate ? Number(a.shift.hourlyRate) : null,
+        isBroadcast: false,
+      })),
+      ...broadcastShifts.map((s) => ({
+        id: s.id,
+        title: s.title,
+        location: s.siteLocation,
+        client: s.clientCompany?.name,
+        startAt: s.startAt,
+        endAt: s.endAt,
+        hourlyRate: s.hourlyRate ? Number(s.hourlyRate) : null,
+        isBroadcast: true,
+      })),
+    ]
+      .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime())
+      .slice(0, 5);
+
+    const nextShifts = allUpcoming;
 
     // Get upcoming holidays (approved or pending, future start dates)
     const upcomingHolidays = await prisma.leaveRequest.findMany({
