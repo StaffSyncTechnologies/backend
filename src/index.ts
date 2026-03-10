@@ -67,6 +67,36 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Email diagnostic endpoint (remove in production)
+app.get('/debug/email-test', async (_req, res) => {
+  const { EmailService } = await import('./services/notifications/email.service');
+  const smtpInfo = {
+    host: process.env.SMTP_HOST || '(not set)',
+    port: process.env.SMTP_PORT || '(not set)',
+    user: process.env.SMTP_USER || '(not set)',
+    pass: process.env.SMTP_PASS ? '***set***' : '(NOT SET)',
+    from: process.env.SMTP_FROM || '(not set)',
+  };
+  try {
+    const testEmail = (_req.query.to as string) || process.env.SMTP_FROM || 'test@example.com';
+    const messageId = await EmailService.send({
+      to: testEmail,
+      subject: 'StaffSync Email Test',
+      html: '<h1>Email is working!</h1><p>This is a test from StaffSync backend.</p>',
+      text: 'Email is working! This is a test from StaffSync backend.',
+    });
+    res.json({ success: true, messageId, smtpConfig: smtpInfo });
+  } catch (err: any) {
+    res.json({
+      success: false,
+      error: err?.message || String(err),
+      code: err?.code,
+      responseCode: err?.responseCode,
+      smtpConfig: smtpInfo,
+    });
+  }
+});
+
 // API Routes
 app.use('/api/v1', routes);
 

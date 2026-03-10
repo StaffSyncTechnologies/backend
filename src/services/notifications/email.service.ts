@@ -1,6 +1,8 @@
 import nodemailer from 'nodemailer';
 import { config } from '../../config';
 
+const smtpConfigured = !!(config.smtp.host && config.smtp.pass);
+
 const transporter = nodemailer.createTransport({
   host: config.smtp.host,
   port: config.smtp.port,
@@ -11,6 +13,16 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// Verify SMTP connection at startup
+if (smtpConfigured) {
+  transporter.verify()
+    .then(() => console.log('✅ SMTP email service connected successfully'))
+    .catch((err) => console.error('❌ SMTP email service connection FAILED:', err.message));
+} else {
+  console.warn('⚠️  SMTP not configured — missing SMTP_HOST or SMTP_PASS env vars. Emails will NOT be sent.');
+  console.warn(`   SMTP_HOST=${config.smtp.host || '(empty)'}, SMTP_USER=${config.smtp.user || '(empty)'}, SMTP_PASS=${config.smtp.pass ? '***set***' : '(empty)'}, SMTP_FROM=${config.smtp.from}`);
+}
+
 export interface EmailOptions {
   to: string;
   subject: string;
@@ -20,6 +32,11 @@ export interface EmailOptions {
 
 export class EmailService {
   static async send({ to, subject, html, text }: EmailOptions): Promise<string> {
+    if (!smtpConfigured) {
+      console.warn(`⚠️  Email to ${to} skipped — SMTP not configured. Set SMTP_HOST and SMTP_PASS env vars.`);
+      return 'skipped-no-smtp';
+    }
+
     const result = await transporter.sendMail({
       from: config.smtp.from,
       to,

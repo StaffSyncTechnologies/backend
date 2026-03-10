@@ -677,6 +677,8 @@ export class WorkerController {
     });
 
     // Send email invite if email is provided
+    let emailSent = false;
+    let emailError: string | null = null;
     if (email) {
       try {
         const messageId = await EmailService.sendInviteCode(
@@ -685,10 +687,12 @@ export class WorkerController {
           fullName || 'Worker',
           organization?.name || 'StaffSync'
         );
+        emailSent = messageId !== 'skipped-no-smtp';
         console.log(`✅ Invite email sent to ${email}, messageId: ${messageId}`);
-      } catch (emailError) {
+      } catch (err: any) {
+        emailError = err?.message || String(err);
         console.error('❌ Failed to send invite email:', emailError);
-        // Continue anyway - invite code is still created
+        console.error('   Full error:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
       }
     }
 
@@ -698,6 +702,8 @@ export class WorkerController {
         inviteCode: inviteCode.code,
         email,
         phone,
+        emailSent,
+        emailError,
       },
     });
   };

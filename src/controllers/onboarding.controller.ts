@@ -193,12 +193,17 @@ export class OnboardingController {
     const orgName = organization?.name || 'your organization';
 
     // Send invite via email and SMS
+    let emailSent = false;
+    let emailErrorMsg: string | null = null;
     if (email) {
       try {
         const messageId = await EmailService.sendInviteCode(email, code, fullName, orgName);
+        emailSent = messageId !== 'skipped-no-smtp';
         console.log(`✅ Onboarding invite email sent to ${email}, messageId: ${messageId}`);
-      } catch (emailError) {
-        console.error('❌ Onboarding failed to send invite email:', emailError);
+      } catch (err: any) {
+        emailErrorMsg = err?.message || String(err);
+        console.error('❌ Onboarding failed to send invite email:', emailErrorMsg);
+        console.error('   Full error:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
       }
     }
     if (phone) {
@@ -214,7 +219,8 @@ export class OnboardingController {
       inviteCode: inviteCode.code,
       email,
       phone,
-      sent: true,
+      emailSent,
+      emailError: emailErrorMsg,
     });
   };
 
