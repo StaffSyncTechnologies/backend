@@ -1,5 +1,8 @@
 import { Request, Response } from 'express';
+import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
+import { EmailService } from '../services/notifications/email.service';
+import { SmsService } from '../services/notifications/sms.service';
 
 export class InviteRequestController {
   /**
@@ -141,7 +144,75 @@ export class InviteRequestController {
         },
       });
 
-      res.json({ success: true, data: updated });
+      // If approved, generate an invite code and send it to the worker
+      let inviteCode: string | null = null;
+      let emailSent = false;
+      let emailError: string | null = null;
+
+      if (status.toUpperCase() === 'APPROVED') {
+        // Generate invite code
+        const code = `${crypto.randomBytes(3).toString('hex').toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+        const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+
+        // Get organization name
+        const organization = await prisma.organization.findUnique({
+          where: { id: user.organizationId },
+          select: { name: true },
+        });
+        const orgName = organization?.name || 'your organization';
+
+        // Create invite code in DB
+        await prisma.inviteCode.create({
+          data: {
+            organizationId: user.organizationId,
+            code,
+            codeHash,
+            email: request.email,
+            phone: request.phone,
+            workerName: request.fullName,
+            createdBy: user.id,
+          },
+        });
+
+        inviteCode = code;
+
+        // Send invite code via email
+        if (request.email) {
+          try {
+            const messageId = await EmailService.sendInviteCode(
+              request.email,
+              code,
+              request.fullName,
+              orgName
+            );
+            emailSent = messageId !== 'skipped-no-smtp';
+            console.log(`✅ Invite code email sent to ${request.email}, messageId: ${messageId}`);
+          } catch (err: any) {
+            emailError = err?.message || String(err);
+            console.error('❌ Failed to send invite code email:', emailError);
+          }
+        }
+
+        // Send invite code via SMS
+        if (request.phone) {
+          try {
+            await SmsService.sendInviteCode(request.phone, code, orgName);
+            console.log(`✅ Invite code SMS sent to ${request.phone}`);
+          } catch (smsErr) {
+            console.error('❌ Failed to send invite code SMS:', smsErr);
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        data: {
+          ...updated,
+          inviteCode,
+          emailSent,
+          emailError,
+        },
+      });
     } catch (error) {
       console.error('Error reviewing invite request:', error);
       res.status(500).json({ success: false, message: 'Internal server error' });

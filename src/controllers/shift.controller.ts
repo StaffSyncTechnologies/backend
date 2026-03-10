@@ -32,47 +32,76 @@ export class ShiftController {
     let clientFilter: any = clientId ? { clientCompanyId: clientId as string } : {};
 
     if (req.user!.role === 'WORKER') {
-      // Check if worker has approved RTW - they can't see shifts without it
+      // Always include shifts directly assigned to this worker
+      const assignedShiftIds = (
+        await prisma.shiftAssignment.findMany({
+          where: {
+            workerId: req.user!.id,
+            status: { in: ['ASSIGNED', 'ACCEPTED'] },
+          },
+          select: { shiftId: true },
+        })
+      ).map((a) => a.shiftId);
+
+      // Also allow browsing available shifts if RTW is approved and manager is set
+      let browseFilter: any = null;
       const workerProfile = await prisma.workerProfile.findUnique({
         where: { userId: req.user!.id },
         select: { rtwStatus: true },
       });
 
-      if (!workerProfile || workerProfile.rtwStatus !== 'APPROVED') {
-        // Worker doesn't have approved RTW - return empty list with message
-        return ApiResponse.ok(res, 'RTW verification required to view shifts', {
-          shifts: [],
-          rtwRequired: true,
-          rtwStatus: workerProfile?.rtwStatus || 'NOT_STARTED',
+      if (workerProfile?.rtwStatus === 'APPROVED') {
+        const worker = await prisma.user.findUnique({
+          where: { id: req.user!.id },
+          select: { managerId: true },
         });
+
+        if (worker?.managerId) {
+          const managerClients = await prisma.staffCompanyAssignment.findMany({
+            where: { staffId: worker.managerId, status: 'ACTIVE' },
+            select: { clientCompanyId: true },
+          });
+          const allowedClientIds = managerClients.map((c) => c.clientCompanyId);
+          browseFilter = { clientCompanyId: { in: allowedClientIds } };
+        }
       }
 
-      // Get the worker's manager
-      const worker = await prisma.user.findUnique({
-        where: { id: req.user!.id },
-        select: { managerId: true },
+      // Build OR filter: assigned shifts + browseable shifts
+      const orConditions: any[] = [];
+      if (assignedShiftIds.length > 0) {
+        orConditions.push({ id: { in: assignedShiftIds } });
+      }
+      if (browseFilter) {
+        orConditions.push(browseFilter);
+      }
+
+      if (orConditions.length === 0) {
+        return ApiResponse.ok(res, 'Shifts retrieved', []);
+      }
+
+      clientFilter = {}; // Reset — handled by OR
+      const shifts = await prisma.shift.findMany({
+        where: {
+          organizationId: req.user!.organizationId,
+          OR: orConditions,
+          ...(status && { status: status as any }),
+          ...(locationId && { locationId: locationId as string }),
+          ...(from && { startAt: { gte: new Date(from as string) } }),
+          ...(to && { endAt: { lte: new Date(to as string) } }),
+        },
+        include: {
+          clientCompany: { select: { id: true, name: true } },
+          location: { select: { id: true, name: true } },
+          assignments: {
+            include: { worker: { select: { id: true, fullName: true } } },
+          },
+          requiredSkills: { include: { skill: true } },
+          _count: { select: { assignments: true, attendances: true } },
+        },
+        orderBy: { startAt: 'asc' },
       });
 
-      if (worker?.managerId) {
-        // Get clients assigned to the worker's manager
-        const managerClients = await prisma.staffCompanyAssignment.findMany({
-          where: {
-            staffId: worker.managerId,
-            status: 'ACTIVE',
-          },
-          select: { clientCompanyId: true },
-        });
-
-        const allowedClientIds = managerClients.map(c => c.clientCompanyId);
-
-        // Filter shifts to only those from manager's clients
-        clientFilter = {
-          clientCompanyId: { in: allowedClientIds },
-        };
-      } else {
-        // Worker has no manager - show no client shifts
-        clientFilter = { clientCompanyId: null };
-      }
+      return ApiResponse.ok(res, 'Shifts retrieved', shifts);
     }
 
     const shifts = await prisma.shift.findMany({
@@ -531,6 +560,20 @@ export class ShiftController {
 
   // Worker actions
   acceptShift = async (req: AuthRequest, res: Response) => {
+    // Check RTW status before allowing acceptance
+    const workerProfile = await prisma.workerProfile.findUnique({
+      where: { userId: req.user!.id },
+      select: { rtwStatus: true },
+    });
+
+    if (!workerProfile || workerProfile.rtwStatus !== 'APPROVED') {
+      throw new AppError(
+        'Right to Work verification must be approved before accepting shifts',
+        403,
+        'RTW_NOT_APPROVED'
+      );
+    }
+
     const assignment = await prisma.shiftAssignment.updateMany({
       where: {
         shiftId: req.params.shiftId,
