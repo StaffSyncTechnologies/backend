@@ -318,6 +318,7 @@ model Organization {
   workerMemberships     WorkerOrgMembership[]
   workerOrgSkills       WorkerOrgSkill[]      @relation("OrgWorkerSkills")
   workerOrgRTWs         WorkerOrgRTW[]        @relation("OrgWorkerRTWs")
+  inviteCodeRequests    InviteCodeRequest[]
 
   @@map("organization")
 }
@@ -608,6 +609,7 @@ model User {
   orgSkills               WorkerOrgSkill[]            @relation("WorkerOrgSkills")
   orgRTWs                 WorkerOrgRTW[]              @relation("WorkerOrgRTWs")
   bankAccount             WorkerBankAccount?
+  inviteRequestsReviewed  InviteCodeRequest[]         @relation("InviteRequestReviewer")
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -1443,6 +1445,37 @@ model TokenBlacklist {
   @@index([token])
   @@index([expiresAt])
   @@map("token_blacklist")
+}
+
+// ============================================================
+// INVITE CODE REQUESTS (from mobile workers)
+// ============================================================
+
+enum InviteRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model InviteCodeRequest {
+  id              String              @id @default(uuid())
+  organizationId  String              @map("organization_id")
+  fullName        String              @map("full_name") @db.VarChar(255)
+  email           String              @db.VarChar(255)
+  phone           String?             @db.VarChar(50)
+  status          InviteRequestStatus @default(PENDING)
+  reviewedBy      String?             @map("reviewed_by")
+  reviewedAt      DateTime?           @map("reviewed_at")
+  notes           String?
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reviewer        User?               @relation("InviteRequestReviewer", fields: [reviewedBy], references: [id])
+
+  @@index([organizationId, status])
+  @@index([email])
+  @@map("invite_code_request")
 }
 
 // ============================================================

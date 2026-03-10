@@ -23,12 +23,14 @@ import workerMembershipRoutes from './workerMembership.routes';
 import complianceRoutes from './compliance.routes';
 import bankAccountRoutes from './bankAccount.routes';
 import nearbyAgencyRoutes from './nearbyAgency.routes';
+import inviteRequestRoutes from './inviteRequest.routes';
 
 const router = Router();
 
 // Public routes
 router.use('/auth', authRoutes);
 router.use('/agencies', nearbyAgencyRoutes); // Public: nearby agencies for workers without invite code
+router.use('/agencies', inviteRequestRoutes); // Public POST + Protected GET/PATCH for invite requests
 router.use('/client-registration', clientRegistrationRoutes); // Client company self-registration
 
 // Protected routes (Agency/Admin)
