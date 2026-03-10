@@ -43,6 +43,26 @@ export class ShiftController {
         })
       ).map((a) => a.shiftId);
 
+      // Include shifts that have been broadcast to this worker
+      const broadcasts = await prisma.shiftBroadcast.findMany({
+        where: {
+          shift: { organizationId: req.user!.organizationId },
+          status: 'OPEN',
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } },
+          ],
+        },
+        select: { shiftId: true, filters: true },
+      });
+      const broadcastShiftIds = broadcasts
+        .filter((b) => {
+          const f = b.filters as any;
+          const targets: string[] = f?.targetWorkerIds || [];
+          return targets.includes(req.user!.id);
+        })
+        .map((b) => b.shiftId);
+
       // Also allow browsing available shifts if RTW is approved and manager is set
       let browseFilter: any = null;
       const workerProfile = await prisma.workerProfile.findUnique({
@@ -66,10 +86,11 @@ export class ShiftController {
         }
       }
 
-      // Build OR filter: assigned shifts + browseable shifts
+      // Build OR filter: assigned shifts + broadcast shifts + browseable shifts
+      const allVisibleShiftIds = [...new Set([...assignedShiftIds, ...broadcastShiftIds])];
       const orConditions: any[] = [];
-      if (assignedShiftIds.length > 0) {
-        orConditions.push({ id: { in: assignedShiftIds } });
+      if (allVisibleShiftIds.length > 0) {
+        orConditions.push({ id: { in: allVisibleShiftIds } });
       }
       if (browseFilter) {
         orConditions.push(browseFilter);
