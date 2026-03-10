@@ -70,12 +70,13 @@ app.get('/health', (_req, res) => {
 // Email diagnostic endpoint (remove in production)
 app.get('/debug/email-test', async (_req, res) => {
   const { EmailService } = await import('./services/notifications/email.service');
-  const smtpInfo = {
-    host: process.env.SMTP_HOST || '(not set)',
-    port: process.env.SMTP_PORT || '(not set)',
-    user: process.env.SMTP_USER || '(not set)',
-    pass: process.env.SMTP_PASS ? '***set***' : '(NOT SET)',
-    from: process.env.SMTP_FROM || '(not set)',
+  const emailInfo = {
+    SENDGRID_API_KEY: process.env.SENDGRID_API_KEY ? `${process.env.SENDGRID_API_KEY.substring(0, 5)}...` : '(NOT SET)',
+    SMTP_PASS: process.env.SMTP_PASS ? `${process.env.SMTP_PASS.substring(0, 5)}...` : '(NOT SET)',
+    SMTP_FROM: process.env.SMTP_FROM || '(NOT SET)',
+    SMTP_HOST: process.env.SMTP_HOST || '(not set)',
+    mode: process.env.SENDGRID_API_KEY?.startsWith('SG.') || process.env.SMTP_PASS?.startsWith('SG.')
+      ? 'SendGrid HTTP API' : 'SMTP (will hang on Render)',
   };
   try {
     const testEmail = (_req.query.to as string) || process.env.SMTP_FROM || 'test@example.com';
@@ -85,14 +86,14 @@ app.get('/debug/email-test', async (_req, res) => {
       html: '<h1>Email is working!</h1><p>This is a test from StaffSync backend.</p>',
       text: 'Email is working! This is a test from StaffSync backend.',
     });
-    res.json({ success: true, messageId, smtpConfig: smtpInfo });
+    res.json({ success: true, messageId, config: emailInfo });
   } catch (err: any) {
     res.json({
       success: false,
       error: err?.message || String(err),
       code: err?.code,
-      responseCode: err?.responseCode,
-      smtpConfig: smtpInfo,
+      response: err?.response?.body,
+      config: emailInfo,
     });
   }
 });

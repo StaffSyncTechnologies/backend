@@ -1,27 +1,36 @@
+import sgMail from '@sendgrid/mail';
 import nodemailer from 'nodemailer';
 import { config } from '../../config';
 
-const smtpConfigured = !!(config.smtp.host && config.smtp.pass);
+// Prefer SendGrid HTTP API (works on Render/cloud), fall back to SMTP for local dev
+const sendgridApiKey = process.env.SENDGRID_API_KEY || config.smtp.pass;
+const useSendGrid = !!(sendgridApiKey && sendgridApiKey.startsWith('SG.'));
+const useSmtp = !useSendGrid && !!(config.smtp.host && config.smtp.pass);
+const emailConfigured = useSendGrid || useSmtp;
 
-const transporter = nodemailer.createTransport({
-  host: config.smtp.host,
-  port: config.smtp.port,
-  secure: config.smtp.secure,
-  auth: {
-    user: config.smtp.user,
-    pass: config.smtp.pass,
-  },
-});
-
-// Verify SMTP connection at startup
-if (smtpConfigured) {
-  transporter.verify()
-    .then(() => console.log('✅ SMTP email service connected successfully'))
-    .catch((err) => console.error('❌ SMTP email service connection FAILED:', err.message));
+if (useSendGrid) {
+  sgMail.setApiKey(sendgridApiKey);
+  console.log('✅ Email service configured via SendGrid HTTP API');
+  console.log(`   From: ${config.smtp.from}`);
+} else if (useSmtp) {
+  console.log('📧 Email service configured via SMTP (nodemailer)');
 } else {
-  console.warn('⚠️  SMTP not configured — missing SMTP_HOST or SMTP_PASS env vars. Emails will NOT be sent.');
-  console.warn(`   SMTP_HOST=${config.smtp.host || '(empty)'}, SMTP_USER=${config.smtp.user || '(empty)'}, SMTP_PASS=${config.smtp.pass ? '***set***' : '(empty)'}, SMTP_FROM=${config.smtp.from}`);
+  console.warn('⚠️  Email NOT configured — set SENDGRID_API_KEY (or SMTP_PASS with SG. prefix) env var.');
+  console.warn(`   SENDGRID_API_KEY=${sendgridApiKey ? '***set but not SG.*' : '(empty)'}, SMTP_PASS=${config.smtp.pass ? '***set***' : '(empty)'}, SMTP_FROM=${config.smtp.from}`);
 }
+
+// SMTP fallback transporter (for local dev)
+const transporter = useSmtp
+  ? nodemailer.createTransport({
+      host: config.smtp.host,
+      port: config.smtp.port,
+      secure: config.smtp.secure,
+      auth: { user: config.smtp.user, pass: config.smtp.pass },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
+    })
+  : null;
 
 export interface EmailOptions {
   to: string;
@@ -32,19 +41,33 @@ export interface EmailOptions {
 
 export class EmailService {
   static async send({ to, subject, html, text }: EmailOptions): Promise<string> {
-    if (!smtpConfigured) {
-      console.warn(`⚠️  Email to ${to} skipped — SMTP not configured. Set SMTP_HOST and SMTP_PASS env vars.`);
+    if (!emailConfigured) {
+      console.warn(`⚠️  Email to ${to} skipped — email not configured.`);
       return 'skipped-no-smtp';
     }
 
-    const result = await transporter.sendMail({
+    if (useSendGrid) {
+      const msg = {
+        to,
+        from: config.smtp.from,
+        subject,
+        html,
+        text: text || '',
+      };
+      const [response] = await sgMail.send(msg);
+      const messageId = response.headers?.['x-message-id'] || `sg-${Date.now()}`;
+      console.log(`📧 Email sent via SendGrid to ${to}, id: ${messageId}`);
+      return messageId;
+    }
+
+    // SMTP fallback
+    const result = await transporter!.sendMail({
       from: config.smtp.from,
       to,
       subject,
       html,
       text,
     });
-
     return result.messageId;
   }
 
