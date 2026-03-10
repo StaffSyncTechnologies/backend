@@ -707,6 +707,21 @@ export class ShiftController {
 
     if (!shift) throw new NotFoundError('Shift');
 
+    // Close any previous OPEN broadcasts for this shift
+    await prisma.shiftBroadcast.updateMany({
+      where: {
+        shiftId: req.params.shiftId,
+        status: 'OPEN',
+      },
+      data: { status: 'EXPIRED' },
+    });
+
+    // Reset shift status to OPEN on re-broadcast
+    await prisma.shift.update({
+      where: { id: req.params.shiftId },
+      data: { status: 'OPEN' },
+    });
+
     const broadcast = await prisma.shiftBroadcast.create({
       data: {
         shiftId: req.params.shiftId,
