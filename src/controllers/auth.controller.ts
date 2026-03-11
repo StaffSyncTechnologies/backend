@@ -9,6 +9,19 @@ import { AuthRequest } from '../middleware/auth';
 import { z } from 'zod';
 import { StorageService } from '../services/storage';
 import { rtwService } from '../services/rtw';
+
+/** Parse DD/MM/YYYY string into a valid Date object */
+function parseDDMMYYYY(str: string): Date {
+  const parts = str.split('/');
+  if (parts.length === 3) {
+    const [dd, mm, yyyy] = parts;
+    const d = new Date(`${yyyy}-${mm}-${dd}`);
+    if (!isNaN(d.getTime())) return d;
+  }
+  const fallback = new Date(str);
+  return isNaN(fallback.getTime()) ? new Date('1970-01-01') : fallback;
+}
+
 import {
   RegisterRequest,
   LoginRequest,
@@ -239,13 +252,13 @@ export class AuthController {
         update: {
           ...(address && { address }),
           ...(postcode && { postcode }),
-          ...(dateOfBirth && { dateOfBirth: new Date(dateOfBirth) }),
+          ...(dateOfBirth && { dateOfBirth: parseDDMMYYYY(dateOfBirth) }),
         },
         create: {
           userId: req.user!.id,
           address: address || '',
           postcode: postcode || '',
-          dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : new Date(),
+          dateOfBirth: dateOfBirth ? parseDDMMYYYY(dateOfBirth) : new Date(),
         },
       });
     }
@@ -1690,13 +1703,13 @@ export class AuthController {
     await prisma.workerProfile.upsert({
       where: { userId: worker.id },
       update: {
-        dateOfBirth: new Date(data.dateOfBirth),
+        dateOfBirth: parseDDMMYYYY(data.dateOfBirth),
         address: data.address,
         postcode: data.postcode,
       },
       create: {
         userId: worker.id,
-        dateOfBirth: new Date(data.dateOfBirth),
+        dateOfBirth: parseDDMMYYYY(data.dateOfBirth),
         address: data.address,
         postcode: data.postcode,
       },
