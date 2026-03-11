@@ -5,6 +5,7 @@ import { AuthRequest } from '../middleware/auth';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { StorageService } from '../services/storage';
+import { InviteCodeService } from '../services/inviteCode.service';
 
 const updateOrgSchema = z.object({
   name: z.string().min(2).max(255).optional(),
@@ -478,27 +479,21 @@ export class OrganizationController {
   };
 
   createInviteCode = async (req: AuthRequest, res: Response) => {
-    const { email, phone, workerName, usageType, maxUses, expiresAt } = req.body;
+    const { email, phone, workerName, usageType, maxUses, expiresAt, type } = req.body;
 
-    const code = `${crypto.randomBytes(3).toString('hex').toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
-    const codeHash = crypto.createHash('sha256').update(code).digest('hex');
-
-    const inviteCode = await prisma.inviteCode.create({
-      data: {
-        organizationId: req.user!.organizationId,
-        code,
-        codeHash,
-        email,
-        phone,
-        workerName,
-        usageType: usageType || 'SINGLE_USE',
-        maxUses: maxUses || 1,
-        expiresAt: expiresAt ? new Date(expiresAt) : undefined,
-        createdBy: req.user!.id,
-      },
+    const result = await InviteCodeService.createWorkerInvite({
+      organizationId: req.user!.organizationId,
+      createdBy: req.user!.id,
+      email,
+      phone,
+      workerName,
+      type: type || 'WORKER',
+      usageType: usageType || 'SINGLE_USE',
+      maxUses: maxUses || 1,
+      expiresAt: expiresAt ? new Date(expiresAt) : undefined,
     });
 
-    res.status(201).json({ success: true, data: inviteCode });
+    res.status(201).json({ success: true, data: result });
   };
 
   revokeInviteCode = async (req: AuthRequest, res: Response) => {
@@ -506,7 +501,7 @@ export class OrganizationController {
       where: {
         id: req.params.codeId,
         organizationId: req.user!.organizationId,
-        status: 'PENDING',
+        status: { in: ['ACTIVE', 'PENDING'] },
       },
       data: { status: 'REVOKED' },
     });

@@ -7,6 +7,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { ExportService } from '../services/export';
 import { EmailService } from '../services/notifications/email.service';
+import { InviteCodeService } from '../services/inviteCode.service';
 import { rtwService, RTWVerificationResult } from '../services/rtw';
 
 export class WorkerController {
@@ -655,57 +656,16 @@ export class WorkerController {
   invite = async (req: AuthRequest, res: Response) => {
     const { email, phone, fullName } = req.body;
 
-    // Create invite code
-    const code = `${crypto.randomBytes(3).toString('hex').toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
-    const codeHash = crypto.createHash('sha256').update(code).digest('hex');
-
-    const organization = await prisma.organization.findUnique({
-      where: { id: req.user!.organizationId },
-      select: { name: true },
+    const result = await InviteCodeService.createWorkerInvite({
+      organizationId: req.user!.organizationId,
+      createdBy: req.user!.id,
+      email,
+      phone,
+      workerName: fullName,
+      
     });
 
-    const inviteCode = await prisma.inviteCode.create({
-      data: {
-        organizationId: req.user!.organizationId,
-        code,
-        codeHash,
-        email,
-        phone,
-        workerName: fullName,
-        createdBy: req.user!.id,
-      },
-    });
-
-    // Send email invite if email is provided
-    let emailSent = false;
-    let emailError: string | null = null;
-    if (email) {
-      try {
-        const messageId = await EmailService.sendInviteCode(
-          email,
-          code,
-          fullName || 'Worker',
-          organization?.name || 'StaffSync'
-        );
-        emailSent = messageId !== 'skipped-no-smtp';
-        console.log(`✅ Invite email sent to ${email}, messageId: ${messageId}`);
-      } catch (err: any) {
-        emailError = err?.message || String(err);
-        console.error('❌ Failed to send invite email:', emailError);
-        console.error('   Full error:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
-      }
-    }
-
-    res.status(201).json({
-      success: true,
-      data: {
-        inviteCode: inviteCode.code,
-        email,
-        phone,
-        emailSent,
-        emailError,
-      },
-    });
+    res.status(201).json({ success: true, data: result });
   };
 
   // Suspend worker

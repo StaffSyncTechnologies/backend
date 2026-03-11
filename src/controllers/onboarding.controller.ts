@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { getModeDefaults, DeploymentMode } from '../utils/deploymentMode';
 import { EmailService } from '../services/notifications/email.service';
 import { SmsService } from '../services/notifications/sms.service';
+import { InviteCodeService } from '../services/inviteCode.service';
 import { ApiResponse } from '../utils/ApiResponse';
 import { AppError } from '../utils/AppError';
 
@@ -154,21 +155,15 @@ export class OnboardingController {
   inviteWorker = async (req: AuthRequest, res: Response) => {
     const { email, phone, fullName } = req.body;
 
-    const code = `${crypto.randomBytes(3).toString('hex').toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
-    const codeHash = crypto.createHash('sha256').update(code).digest('hex');
-
-    const inviteCode = await prisma.inviteCode.create({
-      data: {
-        organizationId: req.user!.organizationId,
-        code,
-        codeHash,
-        email,
-        phone,
-        workerName: fullName,
-        createdBy: req.user!.id,
-      },
+    const result = await InviteCodeService.createWorkerInvite({
+      organizationId: req.user!.organizationId,
+      createdBy: req.user!.id,
+      email,
+      phone,
+      workerName: fullName,
     });
 
+    // Mark onboarding step as complete
     await prisma.organizationOnboarding.upsert({
       where: {
         organizationId_step: {
@@ -185,43 +180,7 @@ export class OnboardingController {
       },
     });
 
-    // Get organization name for the invite message
-    const organization = await prisma.organization.findUnique({
-      where: { id: req.user!.organizationId },
-      select: { name: true },
-    });
-    const orgName = organization?.name || 'your organization';
-
-    // Send invite via email and SMS
-    let emailSent = false;
-    let emailErrorMsg: string | null = null;
-    if (email) {
-      try {
-        const messageId = await EmailService.sendInviteCode(email, code, fullName, orgName);
-        emailSent = messageId !== 'skipped-no-smtp';
-        console.log(`✅ Onboarding invite email sent to ${email}, messageId: ${messageId}`);
-      } catch (err: any) {
-        emailErrorMsg = err?.message || String(err);
-        console.error('❌ Onboarding failed to send invite email:', emailErrorMsg);
-        console.error('   Full error:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
-      }
-    }
-    if (phone) {
-      try {
-        await SmsService.sendInviteCode(phone, code, orgName);
-        console.log(`✅ Onboarding invite SMS sent to ${phone}`);
-      } catch (smsError) {
-        console.error('❌ Onboarding failed to send invite SMS:', smsError);
-      }
-    }
-
-    ApiResponse.created(res, 'Worker invited successfully', {
-      inviteCode: inviteCode.code,
-      email,
-      phone,
-      emailSent,
-      emailError: emailErrorMsg,
-    });
+    ApiResponse.created(res, 'Worker invited successfully', result);
   };
 
   addClient = async (req: AuthRequest, res: Response) => {
