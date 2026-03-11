@@ -10,6 +10,19 @@ import { EmailService } from '../services/notifications/email.service';
 import { InviteCodeService } from '../services/inviteCode.service';
 import { rtwService, RTWVerificationResult } from '../services/rtw';
 
+/** Parse DD/MM/YYYY string into a valid Date object */
+function parseDDMMYYYY(str: string): Date {
+  const parts = str.split('/');
+  if (parts.length === 3) {
+    const [dd, mm, yyyy] = parts;
+    const d = new Date(`${yyyy}-${mm}-${dd}`);
+    if (!isNaN(d.getTime())) return d;
+  }
+  // Fallback: try native parsing
+  const fallback = new Date(str);
+  return isNaN(fallback.getTime()) ? new Date('1970-01-01') : fallback;
+}
+
 export class WorkerController {
   list = async (req: AuthRequest, res: Response) => {
     const { status, skills, rtwStatus, search } = req.query;
@@ -1571,7 +1584,7 @@ export class WorkerController {
         rtwShareCode: codeValidation.normalized,
         address: '',
         postcode: '',
-        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : new Date('1970-01-01'),
+        dateOfBirth: dateOfBirth ? parseDDMMYYYY(dateOfBirth) : new Date('1970-01-01'),
       },
     });
 
