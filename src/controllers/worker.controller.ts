@@ -1588,32 +1588,14 @@ export class WorkerController {
       },
     });
 
-    // Call RTW verification service
-    const result = await rtwService.verify({
-      shareCode: codeValidation.normalized,
-      dateOfBirth,
-    });
-
-    let rtwStatus: 'NOT_STARTED' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
-    if (result.verified && result.status === 'VALID') {
-      rtwStatus = 'APPROVED';
-    } else if (result.status === 'EXPIRED') {
-      rtwStatus = 'EXPIRED';
-    } else {
-      rtwStatus = 'REJECTED';
-    }
-
+    // For self-service submission, always set to PENDING for compliance review
+    // Compliance staff will run the actual verification
     const profile = await prisma.workerProfile.update({
       where: { userId: workerId },
       data: {
-        rtwStatus,
+        rtwStatus: 'PENDING',
         rtwShareCode: codeValidation.normalized,
-        rtwCheckedAt: result.checkDate,
-        rtwCheckedBy: workerId, // Self-service: store worker's own ID
-        rtwExpiresAt: result.expiryDate,
-        rtwAuditNote: result.verified
-          ? `Verified: ${result.workRestriction || 'UNLIMITED'} - ${result.nationality || 'N/A'}`
-          : result.errorMessage,
+        rtwAuditNote: `Submitted via self-service on ${new Date().toISOString().split('T')[0]}`,
       },
     });
 
@@ -1622,16 +1604,7 @@ export class WorkerController {
       data: {
         rtwStatus: profile.rtwStatus,
         rtwShareCode: profile.rtwShareCode,
-        rtwCheckedAt: profile.rtwCheckedAt,
-        rtwExpiresAt: profile.rtwExpiresAt,
         rtwAuditNote: profile.rtwAuditNote,
-        verificationResult: {
-          verified: result.verified,
-          status: result.status,
-          workRestriction: result.workRestriction,
-          expiryDate: result.expiryDate,
-          errorMessage: result.errorMessage,
-        },
       },
     });
   };
