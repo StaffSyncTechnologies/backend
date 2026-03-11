@@ -1596,7 +1596,7 @@ export class WorkerController {
         rtwStatus,
         rtwShareCode: codeValidation.normalized,
         rtwCheckedAt: result.checkDate,
-        rtwCheckedBy: 'SELF',
+        rtwCheckedBy: workerId, // Self-service: store worker's own ID
         rtwExpiresAt: result.expiryDate,
         rtwAuditNote: result.verified
           ? `Verified: ${result.workRestriction || 'UNLIMITED'} - ${result.nationality || 'N/A'}`

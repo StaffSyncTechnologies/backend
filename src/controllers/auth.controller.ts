@@ -293,7 +293,7 @@ export class AuthController {
     const { email } = z.object({ email: z.string().email() }).parse(req.body);
 
     // Always return the same response to prevent email enumeration
-    const successMessage = 'If an account with that email exists, a password reset link has been sent';
+    const successMessage = 'If an account with that email exists, a verification code has been sent';
 
     const user = await prisma.user.findFirst({
       where: { email },
@@ -304,59 +304,67 @@ export class AuthController {
       return;
     }
 
-    // Generate a secure reset token and hash it for storage
-    const rawToken = crypto.randomBytes(32).toString('hex');
-    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    // Generate a 6-digit OTP and store it
+    const verificationCode = EmailService.generateVerificationCode();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        resetToken: hashedToken,
-        resetTokenExpiresAt: expiresAt,
-      },
+    await prisma.workerOtp.upsert({
+      where: { email },
+      update: { code: verificationCode, expiresAt },
+      create: { email, code: verificationCode, expiresAt },
     });
 
-    // Send the unhashed token via email so the user can present it back
+    // Send the OTP via email
     try {
-      await EmailService.sendPasswordReset(user.email, rawToken, user.fullName);
+      await EmailService.sendVerificationCode(email, verificationCode, user.fullName);
     } catch (err) {
-      console.error('Failed to send password reset email:', err);
+      console.error('Failed to send password reset OTP:', err);
     }
 
     ApiResponse.ok(res, successMessage);
   };
 
   resetPassword = async (req: Request, res: Response) => {
-    const { token, newPassword } = z.object({
-      token: z.string().min(1),
+    const { email, code, newPassword } = z.object({
+      email: z.string().email(),
+      code: z.string().length(6),
       newPassword: z.string().min(8, 'Password must be at least 8 characters'),
     }).parse(req.body);
 
-    // Hash the incoming token to compare against stored hash
-    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+    // Look up OTP
+    const otpRecord = await prisma.workerOtp.findUnique({
+      where: { email },
+    });
+
+    if (!otpRecord || otpRecord.code !== code) {
+      throw new AppError('Invalid verification code', 400, 'INVALID_CODE');
+    }
+
+    if (otpRecord.expiresAt < new Date()) {
+      throw new AppError('Verification code expired', 400, 'CODE_EXPIRED');
+    }
 
     const user = await prisma.user.findFirst({
-      where: {
-        resetToken: hashedToken,
-        resetTokenExpiresAt: { gt: new Date() },
-      },
+      where: { email },
     });
 
     if (!user) {
-      throw new AppError('Invalid or expired reset token', 400, 'INVALID_RESET_TOKEN');
+      throw new AppError('Account not found', 404, 'NOT_FOUND');
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 12);
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        passwordHash,
-        resetToken: null,
-        resetTokenExpiresAt: null,
-      },
-    });
+    await prisma.$transaction([
+      prisma.workerOtp.delete({ where: { email } }),
+      prisma.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash,
+          resetToken: null,
+          resetTokenExpiresAt: null,
+        },
+      }),
+    ]);
 
     ApiResponse.ok(res, 'Password reset successfully');
   };
