@@ -6,6 +6,9 @@ import { config } from '../../config';
 
 const uploadDir = path.join(process.cwd(), config.upload.uploadDir);
 
+// Signed URL lifetime in seconds (1 hour)
+const SIGNED_URL_EXPIRY = 3600;
+
 // Initialize Supabase client (lazy — only if configured)
 let supabase: SupabaseClient | null = null;
 
@@ -33,14 +36,14 @@ export interface UploadedFile {
 
 export class StorageService {
   /**
-   * Upload a file buffer to Supabase Storage
+   * Upload a file buffer to Supabase Storage (private bucket)
    */
   static async uploadToSupabase(
     buffer: Buffer,
     originalName: string,
     mimetype: string,
     subdir: string = 'documents'
-  ): Promise<{ storagePath: string; publicUrl: string }> {
+  ): Promise<{ storagePath: string }> {
     const sb = getSupabase();
     if (!sb) throw new Error('Supabase storage is not configured');
 
@@ -60,22 +63,38 @@ export class StorageService {
       throw new Error(`Failed to upload file: ${error.message}`);
     }
 
-    const { data: urlData } = sb.storage
-      .from(config.supabase.bucket)
-      .getPublicUrl(storagePath);
-
-    return { storagePath, publicUrl: urlData.publicUrl };
+    return { storagePath };
   }
 
   /**
-   * Process uploaded file — uploads to Supabase if configured, otherwise uses local path
+   * Generate a signed URL for a Supabase storage path (time-limited access)
+   */
+  static async getSignedUrl(storagePath: string, expiresIn: number = SIGNED_URL_EXPIRY): Promise<string> {
+    const sb = getSupabase();
+    if (!sb) throw new Error('Supabase storage is not configured');
+
+    const { data, error } = await sb.storage
+      .from(config.supabase.bucket)
+      .createSignedUrl(storagePath, expiresIn);
+
+    if (error) {
+      console.error('Supabase signed URL error:', error);
+      throw new Error(`Failed to create signed URL: ${error.message}`);
+    }
+
+    return data.signedUrl;
+  }
+
+  /**
+   * Process uploaded file — uploads to Supabase if configured, otherwise uses local path.
+   * Stores the Supabase storage path as a proxy URL: /api/v1/files/<storagePath>
    */
   static async processUploadAsync(
     file: Express.Multer.File,
     subdir: string = 'documents'
   ): Promise<UploadedFile> {
     if (isSupabaseEnabled() && file.buffer) {
-      const { storagePath, publicUrl } = await this.uploadToSupabase(
+      const { storagePath } = await this.uploadToSupabase(
         file.buffer,
         file.originalname,
         file.mimetype,
@@ -87,7 +106,7 @@ export class StorageService {
         originalName: file.originalname,
         mimetype: file.mimetype,
         size: file.size,
-        url: publicUrl,
+        url: `/api/v1/files/${storagePath}`,
         path: storagePath,
       };
     }
@@ -97,14 +116,12 @@ export class StorageService {
   }
 
   /**
-   * Get the public URL for a file
+   * Get the URL for a file — returns proxy path for Supabase, local path otherwise
    */
   static getFileUrl(filename: string, subdir: string = 'documents'): string {
     if (isSupabaseEnabled()) {
-      const sb = getSupabase()!;
       const storagePath = filename.includes('/') ? filename : `${subdir}/${filename}`;
-      const { data } = sb.storage.from(config.supabase.bucket).getPublicUrl(storagePath);
-      return data.publicUrl;
+      return `/api/v1/files/${storagePath}`;
     }
     return `/uploads/${subdir}/${filename}`;
   }

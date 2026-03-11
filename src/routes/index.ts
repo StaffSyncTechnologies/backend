@@ -24,6 +24,7 @@ import complianceRoutes from './compliance.routes';
 import bankAccountRoutes from './bankAccount.routes';
 import nearbyAgencyRoutes from './nearbyAgency.routes';
 import inviteRequestRoutes from './inviteRequest.routes';
+import filesRoutes from './files.routes';
 
 const router = Router();
 
@@ -32,6 +33,7 @@ router.use('/auth', authRoutes);
 router.use('/agencies', nearbyAgencyRoutes); // Public: nearby agencies for workers without invite code
 router.use('/agencies', inviteRequestRoutes); // Public POST + Protected GET/PATCH for invite requests
 router.use('/client-registration', clientRegistrationRoutes); // Client company self-registration
+router.use('/files', filesRoutes); // File proxy for private Supabase bucket
 
 // Protected routes (Agency/Admin)
 router.use('/dashboard', dashboardRoutes);
