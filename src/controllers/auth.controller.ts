@@ -141,7 +141,7 @@ export class AuthController {
     const data = loginSchema.parse(req.body);
 
     const user = await prisma.user.findFirst({
-      where: { email: data.email },
+      where: { email: { equals: data.email, mode: 'insensitive' } },
       include: { organization: true },
     });
 
@@ -578,7 +578,7 @@ export class AuthController {
     const data = loginSchema.parse(req.body);
 
     const user = await prisma.user.findFirst({
-      where: { email: data.email },
+      where: { email: { equals: data.email, mode: 'insensitive' } },
       include: { organization: true },
     });
 
@@ -1201,10 +1201,10 @@ export class AuthController {
   workerLogin = async (req: Request, res: Response) => {
     const data = workerLoginSchema.parse(req.body);
 
-    // Find worker by email
+    // Find worker by email (case-insensitive)
     const user = await prisma.user.findFirst({
       where: {
-        email: data.email,
+        email: { equals: data.email, mode: 'insensitive' },
         role: 'WORKER',
       },
     });
@@ -1219,15 +1219,15 @@ export class AuthController {
     const verificationCode = EmailService.generateVerificationCode();
     const expiresAt = new Date(Date.now() + config.emailVerification.expiresInMinutes * 60 * 1000);
 
-    // Store OTP
+    // Store OTP using DB email (correct casing)
     await prisma.workerOtp.upsert({
-      where: { email: data.email },
+      where: { email: user.email },
       update: { code: verificationCode, expiresAt },
-      create: { email: data.email, code: verificationCode, expiresAt },
+      create: { email: user.email, code: verificationCode, expiresAt },
     });
 
     // Send OTP email
-    await EmailService.sendVerificationCode(data.email, verificationCode, user.fullName);
+    await EmailService.sendVerificationCode(user.email, verificationCode, user.fullName);
 
     ApiResponse.ok(res, 'Verification code sent to your email', {
       email: data.email,
@@ -1242,7 +1242,7 @@ export class AuthController {
 
     const user = await prisma.user.findFirst({
       where: {
-        email: data.email,
+        email: { equals: data.email, mode: 'insensitive' },
         role: 'WORKER',
       },
       include: { organization: true, workerProfile: true },
@@ -1302,9 +1302,22 @@ export class AuthController {
   workerVerifyOtp = async (req: Request, res: Response) => {
     const data = workerVerifyOtpSchema.parse(req.body);
 
-    // Find OTP record
+    // Find worker first (case-insensitive) to get DB email
+    const user = await prisma.user.findFirst({
+      where: {
+        email: { equals: data.email, mode: 'insensitive' },
+        role: 'WORKER',
+      },
+      include: { organization: true, workerProfile: true },
+    });
+
+    if (!user) {
+      throw new AppError('Account not found', 404, 'NOT_FOUND');
+    }
+
+    // Find OTP record using DB email
     const otpRecord = await prisma.workerOtp.findUnique({
-      where: { email: data.email },
+      where: { email: user.email },
     });
 
     if (!otpRecord) {
@@ -1319,22 +1332,9 @@ export class AuthController {
       throw new AppError('Invalid verification code', 400, 'INVALID_OTP');
     }
 
-    // Find worker
-    const user = await prisma.user.findFirst({
-      where: {
-        email: data.email,
-        role: 'WORKER',
-      },
-      include: { organization: true, workerProfile: true },
-    });
-
-    if (!user) {
-      throw new AppError('Account not found', 404, 'NOT_FOUND');
-    }
-
     // Delete used OTP and update user
     await prisma.$transaction([
-      prisma.workerOtp.delete({ where: { email: data.email } }),
+      prisma.workerOtp.delete({ where: { email: user.email } }),
       prisma.user.update({
         where: { id: user.id },
         data: { emailVerified: true, lastLoginAt: new Date() },
@@ -1405,7 +1405,7 @@ export class AuthController {
 
     // Find the worker by email (they're in registration flow)
     const worker = await prisma.user.findFirst({
-      where: { email, role: 'WORKER' },
+      where: { email: { equals: email, mode: 'insensitive' }, role: 'WORKER' },
     });
 
     if (!worker) {
@@ -1450,7 +1450,7 @@ export class AuthController {
     }
 
     const worker = await prisma.user.findFirst({
-      where: { email, role: 'WORKER' },
+      where: { email: { equals: email as string, mode: 'insensitive' }, role: 'WORKER' },
     });
 
     if (!worker) {
@@ -1486,7 +1486,7 @@ export class AuthController {
     }
 
     const worker = await prisma.user.findFirst({
-      where: { email, role: 'WORKER' },
+      where: { email: { equals: email, mode: 'insensitive' }, role: 'WORKER' },
     });
 
     if (!worker) {
@@ -1530,7 +1530,7 @@ export class AuthController {
 
     // Find the worker by email
     const worker = await prisma.user.findFirst({
-      where: { email, role: 'WORKER' },
+      where: { email: { equals: email, mode: 'insensitive' }, role: 'WORKER' },
     });
 
     if (!worker) {
@@ -1584,7 +1584,7 @@ export class AuthController {
 
     // Find the worker by email
     const worker = await prisma.user.findFirst({
-      where: { email, role: 'WORKER' },
+      where: { email: { equals: email, mode: 'insensitive' }, role: 'WORKER' },
       include: { workerProfile: true },
     });
 
@@ -1669,7 +1669,7 @@ export class AuthController {
     }).parse(req.body);
 
     const worker = await prisma.user.findFirst({
-      where: { email: data.email, role: 'WORKER' },
+      where: { email: { equals: data.email, mode: 'insensitive' }, role: 'WORKER' },
     });
 
     if (!worker) {
@@ -1716,7 +1716,7 @@ export class AuthController {
     }
 
     const worker = await prisma.user.findFirst({
-      where: { email, role: 'WORKER' },
+      where: { email: { equals: email, mode: 'insensitive' }, role: 'WORKER' },
       include: { workerProfile: true },
     });
 

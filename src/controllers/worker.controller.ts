@@ -1548,8 +1548,8 @@ export class WorkerController {
     const { shareCode, dateOfBirth } = req.body;
     const workerId = req.user!.id;
 
-    if (!shareCode || !dateOfBirth) {
-      throw new AppError('Share code and date of birth are required', 400);
+    if (!shareCode) {
+      throw new AppError('Share code is required', 400);
     }
 
     // Validate share code format
@@ -1571,7 +1571,7 @@ export class WorkerController {
         rtwShareCode: codeValidation.normalized,
         address: '',
         postcode: '',
-        dateOfBirth: new Date(dateOfBirth),
+        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : new Date('1970-01-01'),
       },
     });
 
