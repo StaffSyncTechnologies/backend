@@ -294,7 +294,7 @@ export class AuthController {
     const { email } = z.object({ email: z.string().email() }).parse(req.body);
 
     const user = await prisma.user.findFirst({
-      where: { email },
+      where: { email: { equals: email, mode: 'insensitive' } },
     });
 
     if (!user) {
@@ -307,13 +307,15 @@ export class AuthController {
     const verificationCode = EmailService.generateVerificationCode();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
+    // Use the DB email (preserves original casing) for OTP storage
+    const dbEmail = user.email;
     await prisma.workerOtp.upsert({
-      where: { email },
+      where: { email: dbEmail },
       update: { code: verificationCode, expiresAt },
-      create: { email, code: verificationCode, expiresAt },
+      create: { email: dbEmail, code: verificationCode, expiresAt },
     });
 
-    console.log(`🔑 Password reset OTP for ${email}: ${verificationCode}`);
+    console.log(`🔑 Password reset OTP for ${dbEmail}: ${verificationCode}`);
 
     // Try email first, then fall back to SMS
     let deliveredVia = 'none';
@@ -352,9 +354,18 @@ export class AuthController {
       newPassword: z.string().min(8, 'Password must be at least 8 characters'),
     }).parse(req.body);
 
-    // Look up OTP
+    // Find user first (case-insensitive) to get the DB email for OTP lookup
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+    });
+
+    if (!user) {
+      throw new AppError('Account not found', 404, 'NOT_FOUND');
+    }
+
+    // Look up OTP using DB email (correct casing)
     const otpRecord = await prisma.workerOtp.findUnique({
-      where: { email },
+      where: { email: user.email },
     });
 
     if (!otpRecord || otpRecord.code !== code) {
@@ -365,18 +376,10 @@ export class AuthController {
       throw new AppError('Verification code expired', 400, 'CODE_EXPIRED');
     }
 
-    const user = await prisma.user.findFirst({
-      where: { email },
-    });
-
-    if (!user) {
-      throw new AppError('Account not found', 404, 'NOT_FOUND');
-    }
-
     const passwordHash = await bcrypt.hash(newPassword, 12);
 
     await prisma.$transaction([
-      prisma.workerOtp.delete({ where: { email } }),
+      prisma.workerOtp.delete({ where: { email: user.email } }),
       prisma.user.update({
         where: { id: user.id },
         data: {
