@@ -4,6 +4,7 @@ import { AppError, NotFoundError } from '../utils/AppError';
 import { AuthRequest } from '../middleware/auth';
 import { z } from 'zod';
 import crypto from 'crypto';
+import { StorageService } from '../services/storage';
 
 const updateOrgSchema = z.object({
   name: z.string().min(2).max(255).optional(),
@@ -107,20 +108,20 @@ export class OrganizationController {
       throw new AppError('No file uploaded', 400, 'NO_FILE');
     }
 
-    const logoUrl = `/uploads/logos/${req.file.filename}`;
+    const fileData = await StorageService.processUploadAsync(req.file, 'logos');
 
     const org = await prisma.organization.update({
       where: { id: req.user!.organizationId },
-      data: { logoUrl },
+      data: { logoUrl: fileData.url },
     });
 
     res.json({
       success: true,
       data: {
         logoUrl: org.logoUrl,
-        filename: req.file.filename,
-        originalName: req.file.originalname,
-        size: req.file.size,
+        filename: fileData.filename,
+        originalName: fileData.originalName,
+        size: fileData.size,
       }
     });
   };
@@ -130,20 +131,20 @@ export class OrganizationController {
       throw new AppError('No file uploaded', 400, 'NO_FILE');
     }
 
-    const coverImageUrl = `/uploads/covers/${req.file.filename}`;
+    const fileData = await StorageService.processUploadAsync(req.file, 'covers');
 
     const org = await prisma.organization.update({
       where: { id: req.user!.organizationId },
-      data: { coverImageUrl },
+      data: { coverImageUrl: fileData.url },
     });
 
     res.json({ 
       success: true, 
       data: { 
         coverImageUrl: org.coverImageUrl,
-        filename: req.file.filename,
-        originalName: req.file.originalname,
-        size: req.file.size,
+        filename: fileData.filename,
+        originalName: fileData.originalName,
+        size: fileData.size,
       } 
     });
   };

@@ -1,8 +1,26 @@
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { config } from '../../config';
 
 const uploadDir = path.join(process.cwd(), config.upload.uploadDir);
+
+// Initialize Supabase client (lazy — only if configured)
+let supabase: SupabaseClient | null = null;
+
+function getSupabase(): SupabaseClient | null {
+  if (supabase) return supabase;
+  if (config.supabase.url && config.supabase.serviceKey) {
+    supabase = createClient(config.supabase.url, config.supabase.serviceKey);
+    return supabase;
+  }
+  return null;
+}
+
+function isSupabaseEnabled(): boolean {
+  return !!getSupabase();
+}
 
 export interface UploadedFile {
   filename: string;
@@ -15,28 +33,96 @@ export interface UploadedFile {
 
 export class StorageService {
   /**
+   * Upload a file buffer to Supabase Storage
+   */
+  static async uploadToSupabase(
+    buffer: Buffer,
+    originalName: string,
+    mimetype: string,
+    subdir: string = 'documents'
+  ): Promise<{ storagePath: string; publicUrl: string }> {
+    const sb = getSupabase();
+    if (!sb) throw new Error('Supabase storage is not configured');
+
+    const ext = path.extname(originalName);
+    const uniqueName = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${ext}`;
+    const storagePath = `${subdir}/${uniqueName}`;
+
+    const { error } = await sb.storage
+      .from(config.supabase.bucket)
+      .upload(storagePath, buffer, {
+        contentType: mimetype,
+        upsert: false,
+      });
+
+    if (error) {
+      console.error('Supabase upload error:', error);
+      throw new Error(`Failed to upload file: ${error.message}`);
+    }
+
+    const { data: urlData } = sb.storage
+      .from(config.supabase.bucket)
+      .getPublicUrl(storagePath);
+
+    return { storagePath, publicUrl: urlData.publicUrl };
+  }
+
+  /**
+   * Process uploaded file — uploads to Supabase if configured, otherwise uses local path
+   */
+  static async processUploadAsync(
+    file: Express.Multer.File,
+    subdir: string = 'documents'
+  ): Promise<UploadedFile> {
+    if (isSupabaseEnabled() && file.buffer) {
+      const { storagePath, publicUrl } = await this.uploadToSupabase(
+        file.buffer,
+        file.originalname,
+        file.mimetype,
+        subdir
+      );
+
+      return {
+        filename: storagePath,
+        originalName: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+        url: publicUrl,
+        path: storagePath,
+      };
+    }
+
+    // Fallback: local disk (file already saved by multer diskStorage)
+    return this.processUpload(file, subdir);
+  }
+
+  /**
    * Get the public URL for a file
    */
   static getFileUrl(filename: string, subdir: string = 'documents'): string {
-    // In production, this would return S3/CDN URL
-    // For now, return local server path
+    if (isSupabaseEnabled()) {
+      const sb = getSupabase()!;
+      const storagePath = filename.includes('/') ? filename : `${subdir}/${filename}`;
+      const { data } = sb.storage.from(config.supabase.bucket).getPublicUrl(storagePath);
+      return data.publicUrl;
+    }
     return `/uploads/${subdir}/${filename}`;
   }
 
   /**
-   * Process uploaded file and return metadata
+   * Process uploaded file and return metadata (sync — local disk only, kept for backward compat)
    */
   static processUpload(
     file: Express.Multer.File,
     subdir: string = 'documents'
   ): UploadedFile {
     return {
-      filename: file.filename,
+      filename: file.filename || file.originalname,
       originalName: file.originalname,
       mimetype: file.mimetype,
       size: file.size,
-      url: this.getFileUrl(file.filename, subdir),
-      path: file.path,
+      url: this.getFileUrl(file.filename || file.originalname, subdir),
+      path: file.path || '',
     };
   }
 
@@ -45,6 +131,18 @@ export class StorageService {
    */
   static async deleteFile(filename: string, subdir: string = 'documents'): Promise<boolean> {
     try {
+      if (isSupabaseEnabled()) {
+        const sb = getSupabase()!;
+        const storagePath = filename.includes('/') ? filename : `${subdir}/${filename}`;
+        const { error } = await sb.storage.from(config.supabase.bucket).remove([storagePath]);
+        if (error) {
+          console.error('Supabase delete error:', error);
+          return false;
+        }
+        return true;
+      }
+
+      // Fallback: local disk
       const filePath = path.join(uploadDir, subdir, filename);
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
@@ -74,5 +172,12 @@ export class StorageService {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  /**
+   * Check if Supabase storage is active
+   */
+  static isUsingSupabase(): boolean {
+    return isSupabaseEnabled();
   }
 }

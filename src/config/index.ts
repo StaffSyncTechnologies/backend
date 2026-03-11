@@ -16,6 +16,12 @@ export const config = {
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '5242880', 10),
     uploadDir: process.env.UPLOAD_DIR || 'uploads',
   },
+
+  supabase: {
+    url: process.env.SUPABASE_URL || '',
+    serviceKey: process.env.SUPABASE_SERVICE_KEY || '',
+    bucket: process.env.SUPABASE_BUCKET || 'uploads',
+  },
   
   smtp: {
     host: process.env.SMTP_HOST || 'smtp.sendgrid.net',

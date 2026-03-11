@@ -5,20 +5,25 @@ import crypto from 'crypto';
 import { config } from '../config';
 import { AppError } from '../utils/AppError';
 
-// Ensure upload directory exists
-const uploadDir = path.join(process.cwd(), config.upload.uploadDir);
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+// Check if Supabase is configured — use memory storage if so, disk otherwise
+const useSupabase = !!(config.supabase.url && config.supabase.serviceKey);
 
-// Create subdirectories for different document types
-const docTypeDirs = ['documents', 'certifications', 'rtw', 'profile'];
-docTypeDirs.forEach(dir => {
-  const dirPath = path.join(uploadDir, dir);
-  if (!fs.existsSync(dirPath)) {
-    fs.mkdirSync(dirPath, { recursive: true });
+// Ensure upload directory exists (for local fallback)
+const uploadDir = path.join(process.cwd(), config.upload.uploadDir);
+if (!useSupabase) {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
   }
-});
+
+  // Create subdirectories for different document types
+  const docTypeDirs = ['documents', 'certifications', 'rtw', 'profile', 'logos', 'covers'];
+  docTypeDirs.forEach(dir => {
+    const dirPath = path.join(uploadDir, dir);
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+    }
+  });
+}
 
 // File filter for allowed types
 const fileFilter = (
@@ -42,89 +47,7 @@ const fileFilter = (
   }
 };
 
-// Storage configuration
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, path.join(uploadDir, 'documents'));
-  },
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = crypto.randomBytes(8).toString('hex');
-    const ext = path.extname(file.originalname);
-    cb(null, `${Date.now()}-${uniqueSuffix}${ext}`);
-  },
-});
-
-// Multer instance for single file upload
-export const uploadSingle = multer({
-  storage,
-  fileFilter,
-  limits: {
-    fileSize: config.upload.maxFileSize, // 5MB default
-  },
-}).single('file');
-
-// Multer instance for multiple files (max 5)
-export const uploadMultiple = multer({
-  storage,
-  fileFilter,
-  limits: {
-    fileSize: config.upload.maxFileSize,
-    files: 5,
-  },
-}).array('files', 5);
-
-// Memory storage for processing before saving (e.g., S3)
-export const uploadToMemory = multer({
-  storage: multer.memoryStorage(),
-  fileFilter,
-  limits: {
-    fileSize: config.upload.maxFileSize,
-  },
-}).single('file');
-
-// Certification-specific storage
-const certificationStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, path.join(uploadDir, 'certifications'));
-  },
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = crypto.randomBytes(8).toString('hex');
-    const ext = path.extname(file.originalname);
-    cb(null, `cert-${Date.now()}-${uniqueSuffix}${ext}`);
-  },
-});
-
-export const uploadCertification = multer({
-  storage: certificationStorage,
-  fileFilter,
-  limits: {
-    fileSize: config.upload.maxFileSize,
-  },
-}).single('file');
-
-// Multiple certifications upload
-export const uploadCertifications = multer({
-  storage: certificationStorage,
-  fileFilter,
-  limits: {
-    fileSize: config.upload.maxFileSize,
-    files: 10,
-  },
-}).array('files', 10);
-
-// Profile picture storage
-const profileStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, path.join(uploadDir, 'profile'));
-  },
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = crypto.randomBytes(8).toString('hex');
-    const ext = path.extname(file.originalname);
-    cb(null, `profile-${Date.now()}-${uniqueSuffix}${ext}`);
-  },
-});
-
-// Image-only filter for profile pictures
+// Image-only filter for profile pictures, logos, covers
 const imageFilter = (
   _req: Express.Request,
   file: Express.Multer.File,
@@ -141,64 +64,78 @@ const imageFilter = (
   if (allowedMimes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new AppError('Invalid file type. Only JPEG, PNG, HEIC allowed for profile pictures.', 400, 'INVALID_FILE_TYPE'));
+    cb(new AppError('Invalid file type. Only JPEG, PNG, HEIC allowed for images.', 400, 'INVALID_FILE_TYPE'));
   }
 };
 
+// Helper: build disk storage for a specific subdirectory
+function makeDiskStorage(subdir: string, prefix: string = '') {
+  return multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      cb(null, path.join(uploadDir, subdir));
+    },
+    filename: (_req, file, cb) => {
+      const uniqueSuffix = crypto.randomBytes(8).toString('hex');
+      const ext = path.extname(file.originalname);
+      cb(null, `${prefix}${Date.now()}-${uniqueSuffix}${ext}`);
+    },
+  });
+}
+
+// Helper: pick storage — memory if Supabase, disk otherwise
+function getStorage(subdir: string, prefix: string = '') {
+  return useSupabase ? multer.memoryStorage() : makeDiskStorage(subdir, prefix);
+}
+
+// ── Document uploads ───────────────────────────────
+export const uploadSingle = multer({
+  storage: getStorage('documents'),
+  fileFilter,
+  limits: { fileSize: config.upload.maxFileSize },
+}).single('file');
+
+export const uploadMultiple = multer({
+  storage: getStorage('documents'),
+  fileFilter,
+  limits: { fileSize: config.upload.maxFileSize, files: 5 },
+}).array('files', 5);
+
+export const uploadToMemory = multer({
+  storage: multer.memoryStorage(),
+  fileFilter,
+  limits: { fileSize: config.upload.maxFileSize },
+}).single('file');
+
+// ── Certification uploads ──────────────────────────
+export const uploadCertification = multer({
+  storage: getStorage('certifications', 'cert-'),
+  fileFilter,
+  limits: { fileSize: config.upload.maxFileSize },
+}).single('file');
+
+export const uploadCertifications = multer({
+  storage: getStorage('certifications', 'cert-'),
+  fileFilter,
+  limits: { fileSize: config.upload.maxFileSize, files: 10 },
+}).array('files', 10);
+
+// ── Profile picture uploads ────────────────────────
 export const uploadProfilePic = multer({
-  storage: profileStorage,
+  storage: getStorage('profile', 'profile-'),
   fileFilter: imageFilter,
-  limits: {
-    fileSize: 2 * 1024 * 1024, // 2MB for profile pics
-  },
+  limits: { fileSize: 2 * 1024 * 1024 },
 }).single('file');
 
-// Logo storage (organization logos)
-const logoDir = path.join(uploadDir, 'logos');
-if (!fs.existsSync(logoDir)) {
-  fs.mkdirSync(logoDir, { recursive: true });
-}
-
-const logoStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, logoDir);
-  },
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = crypto.randomBytes(8).toString('hex');
-    const ext = path.extname(file.originalname);
-    cb(null, `logo-${Date.now()}-${uniqueSuffix}${ext}`);
-  },
-});
-
+// ── Organisation logo uploads ──────────────────────
 export const uploadLogo = multer({
-  storage: logoStorage,
+  storage: getStorage('logos', 'logo-'),
   fileFilter: imageFilter,
-  limits: {
-    fileSize: 2 * 1024 * 1024, // 2MB for logos
-  },
+  limits: { fileSize: 2 * 1024 * 1024 },
 }).single('file');
 
-// Cover image storage (organization cover images)
-const coverDir = path.join(uploadDir, 'covers');
-if (!fs.existsSync(coverDir)) {
-  fs.mkdirSync(coverDir, { recursive: true });
-}
-
-const coverStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, coverDir);
-  },
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = crypto.randomBytes(8).toString('hex');
-    const ext = path.extname(file.originalname);
-    cb(null, `cover-${Date.now()}-${uniqueSuffix}${ext}`);
-  },
-});
-
+// ── Organisation cover image uploads ───────────────
 export const uploadCoverImage = multer({
-  storage: coverStorage,
+  storage: getStorage('covers', 'cover-'),
   fileFilter: imageFilter,
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB for cover images
-  },
+  limits: { fileSize: 5 * 1024 * 1024 },
 }).single('file');

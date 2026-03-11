@@ -1380,8 +1380,8 @@ export class AuthController {
       throw new AppError('Worker not found. Please complete registration first.', 404, 'WORKER_NOT_FOUND');
     }
 
-    // Process the uploaded file
-    const fileData = StorageService.processUpload(req.file, 'certifications');
+    // Process the uploaded file (uploads to Supabase if configured)
+    const fileData = await StorageService.processUploadAsync(req.file, 'certifications');
 
     // Create document record
     const document = await prisma.workerDocument.create({
@@ -1505,8 +1505,8 @@ export class AuthController {
       throw new AppError('Worker not found. Please complete registration first.', 404, 'WORKER_NOT_FOUND');
     }
 
-    // Process the uploaded file
-    const fileData = StorageService.processUpload(req.file, 'profile');
+    // Process the uploaded file (uploads to Supabase if configured)
+    const fileData = await StorageService.processUploadAsync(req.file, 'profile');
 
     // Update worker with profile pic URL
     await prisma.user.update({
