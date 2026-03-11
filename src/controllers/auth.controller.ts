@@ -25,6 +25,7 @@ import {
 } from '../types/dto/auth.dto';
 import crypto from 'crypto';
 import { EmailService } from '../services/notifications/email.service';
+import { SmsService } from '../services/notifications/sms.service';
 import { NotificationService } from '../services/notifications';
 import { SubscriptionNotificationService } from '../services/notifications/subscription.notification';
 
@@ -292,15 +293,13 @@ export class AuthController {
   forgotPassword = async (req: Request, res: Response) => {
     const { email } = z.object({ email: z.string().email() }).parse(req.body);
 
-    // Always return the same response to prevent email enumeration
-    const successMessage = 'If an account with that email exists, a verification code has been sent';
-
     const user = await prisma.user.findFirst({
       where: { email },
     });
 
     if (!user) {
-      ApiResponse.ok(res, successMessage);
+      // Don't reveal if email exists
+      ApiResponse.ok(res, 'If an account with that email exists, a verification code has been sent');
       return;
     }
 
@@ -314,14 +313,36 @@ export class AuthController {
       create: { email, code: verificationCode, expiresAt },
     });
 
-    // Send the OTP via email
+    console.log(`🔑 Password reset OTP for ${email}: ${verificationCode}`);
+
+    // Try email first, then fall back to SMS
+    let deliveredVia = 'none';
     try {
-      await EmailService.sendVerificationCode(email, verificationCode, user.fullName);
+      const emailResult = await EmailService.sendVerificationCode(email, verificationCode, user.fullName);
+      if (emailResult && emailResult !== 'skipped-no-smtp') {
+        deliveredVia = 'email';
+      }
     } catch (err) {
-      console.error('Failed to send password reset OTP:', err);
+      console.error('Email delivery failed:', err);
     }
 
-    ApiResponse.ok(res, successMessage);
+    // If email didn't work, try SMS
+    if (deliveredVia === 'none' && user.phone) {
+      try {
+        const smsResult = await SmsService.sendVerificationCode(user.phone, verificationCode);
+        if (smsResult && smsResult !== 'skipped') {
+          deliveredVia = 'sms';
+        }
+      } catch (err) {
+        console.error('SMS delivery failed:', err);
+      }
+    }
+
+    if (deliveredVia === 'none') {
+      console.warn(`⚠️ Could not deliver OTP to ${email} via any channel`);
+    }
+
+    ApiResponse.ok(res, 'Verification code sent', { deliveredVia });
   };
 
   resetPassword = async (req: Request, res: Response) => {
