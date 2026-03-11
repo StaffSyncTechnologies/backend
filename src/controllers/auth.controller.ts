@@ -1599,7 +1599,7 @@ export class AuthController {
         rtwStatus,
         rtwShareCode: codeValidation.normalized,
         rtwCheckedAt: result.checkDate,
-        rtwCheckedBy: 'SELF_SERVICE',
+        rtwCheckedBy: worker.id, // Self-service: store worker's own ID
         rtwExpiresAt: result.expiryDate,
         rtwAuditNote: result.verified
           ? `Verified: ${result.workRestriction || 'UNLIMITED'} - ${result.nationality || 'N/A'}`

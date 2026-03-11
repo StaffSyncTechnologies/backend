@@ -20,10 +20,10 @@ export class WorkerController {
     let managerFilter: any = {};
     
     if (userRole === 'SHIFT_COORDINATOR') {
-      // Shift Coordinator only sees workers assigned directly to them
-      managerFilter = { managerId: userId };
+      // Shift Coordinator sees workers assigned to them + unassigned workers
+      managerFilter = { OR: [{ managerId: userId }, { managerId: null }] };
     } else if (userRole === 'OPS_MANAGER') {
-      // Ops Manager sees workers assigned to Shift Coordinators that report to them
+      // Ops Manager sees workers assigned to their Shift Coordinators + unassigned workers
       const myShiftCoordinators = await prisma.user.findMany({
         where: {
           organizationId: req.user!.organizationId,
@@ -33,7 +33,7 @@ export class WorkerController {
         select: { id: true },
       });
       const coordinatorIds = myShiftCoordinators.map(sc => sc.id);
-      managerFilter = { managerId: { in: coordinatorIds } };
+      managerFilter = { OR: [{ managerId: { in: coordinatorIds } }, { managerId: null }] };
     }
     // ADMIN sees all workers (no filter)
 
@@ -75,7 +75,7 @@ export class WorkerController {
     let managerFilter: any = {};
     
     if (userRole === 'SHIFT_COORDINATOR') {
-      managerFilter = { managerId: userId };
+      managerFilter = { OR: [{ managerId: userId }, { managerId: null }] };
     } else if (userRole === 'OPS_MANAGER') {
       const myShiftCoordinators = await prisma.user.findMany({
         where: {
@@ -86,7 +86,7 @@ export class WorkerController {
         select: { id: true },
       });
       const coordinatorIds = myShiftCoordinators.map(sc => sc.id);
-      managerFilter = { managerId: { in: coordinatorIds } };
+      managerFilter = { OR: [{ managerId: { in: coordinatorIds } }, { managerId: null }] };
     }
 
     // Calculate week boundaries for percentage change

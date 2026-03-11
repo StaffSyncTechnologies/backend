@@ -116,6 +116,10 @@ export class ComplianceController {
               phone: true,
               status: true,
               createdAt: true,
+              orgRTWs: {
+                where: { organizationId: orgId },
+                take: 1,
+              },
             },
           },
           rtwChecker: {
@@ -132,21 +136,26 @@ export class ComplianceController {
     res.json({
       success: true,
       data: {
-        workers: workers.map((w) => ({
-          id: w.userId,
-          fullName: w.user.fullName,
-          email: w.user.email,
-          phone: w.user.phone,
-          status: w.user.status,
-          rtwStatus: w.rtwStatus,
-          rtwShareCode: w.rtwShareCode,
-          rtwCheckedAt: w.rtwCheckedAt,
-          rtwExpiresAt: w.rtwExpiresAt,
-          rtwAuditNote: w.rtwAuditNote,
-          rtwCheckedBy: w.rtwChecker?.fullName,
-          onboardingStatus: w.onboardingStatus,
-          createdAt: w.user.createdAt,
-        })),
+        workers: workers.map((w) => {
+          const orgRtw = w.user.orgRTWs?.[0];
+          return {
+            id: w.userId,
+            fullName: w.user.fullName,
+            email: w.user.email,
+            phone: w.user.phone,
+            status: w.user.status,
+            rtwStatus: orgRtw?.status || w.rtwStatus,
+            rtwShareCode: w.rtwShareCode || orgRtw?.shareCode || null,
+            rtwCheckedAt: w.rtwCheckedAt || orgRtw?.checkedAt || null,
+            rtwExpiresAt: w.rtwExpiresAt || orgRtw?.expiresAt || null,
+            rtwAuditNote: w.rtwAuditNote || orgRtw?.auditNote || null,
+            rtwCheckedBy: w.rtwChecker
+              ? (w.rtwChecker.id === w.userId ? 'Self Service' : w.rtwChecker.fullName)
+              : null,
+            onboardingStatus: w.onboardingStatus,
+            createdAt: w.user.createdAt,
+          };
+        }),
         pagination: {
           page: pageNum,
           limit: limitNum,
@@ -374,26 +383,30 @@ export class ComplianceController {
       throw new NotFoundError('Worker');
     }
 
-    const profile = await prisma.workerProfile.findUnique({
-      where: { userId: workerId },
-      include: {
-        rtwChecker: {
-          select: { id: true, fullName: true },
+    const [profile, orgRtw, documents] = await Promise.all([
+      prisma.workerProfile.findUnique({
+        where: { userId: workerId },
+        include: {
+          rtwChecker: {
+            select: { id: true, fullName: true },
+          },
         },
-      },
-    });
-
-    const documents = await prisma.workerDocument.findMany({
-      where: { workerId },
-      select: {
-        id: true,
-        documentType: true,
-        status: true,
-        createdAt: true,
-        verifiedAt: true,
-        expiresAt: true,
-      },
-    });
+      }),
+      prisma.workerOrgRTW.findUnique({
+        where: { workerId_organizationId: { workerId, organizationId: orgId } },
+      }),
+      prisma.workerDocument.findMany({
+        where: { workerId },
+        select: {
+          id: true,
+          documentType: true,
+          status: true,
+          createdAt: true,
+          verifiedAt: true,
+          expiresAt: true,
+        },
+      }),
+    ]);
 
     res.json({
       success: true,
@@ -403,13 +416,15 @@ export class ComplianceController {
         email: worker.email,
         phone: worker.phone,
         status: worker.status,
-        rtwStatus: profile?.rtwStatus,
-        rtwShareCode: profile?.rtwShareCode,
-        rtwCheckedAt: profile?.rtwCheckedAt,
-        rtwExpiresAt: profile?.rtwExpiresAt,
-        rtwAuditNote: profile?.rtwAuditNote,
+        rtwStatus: orgRtw?.status || profile?.rtwStatus,
+        rtwShareCode: profile?.rtwShareCode || orgRtw?.shareCode || null,
+        rtwCheckedAt: profile?.rtwCheckedAt || orgRtw?.checkedAt || null,
+        rtwExpiresAt: profile?.rtwExpiresAt || orgRtw?.expiresAt || null,
+        rtwAuditNote: profile?.rtwAuditNote || orgRtw?.auditNote || null,
         rtwAuditUrl: profile?.rtwAuditUrl,
-        rtwCheckedBy: profile?.rtwChecker?.fullName,
+        rtwCheckedBy: profile?.rtwChecker
+          ? (profile.rtwChecker.id === workerId ? 'Self Service' : profile.rtwChecker.fullName)
+          : null,
         onboardingStatus: profile?.onboardingStatus,
         dateOfBirth: profile?.dateOfBirth,
         documents,
