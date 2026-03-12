@@ -43,10 +43,10 @@ export class ShiftController {
         })
       ).map((a) => a.shiftId);
 
-      // Include shifts that have been broadcast to this worker
+      // Include shifts that have been broadcast to this worker (only OPEN, non-expired, non-filled)
       const broadcasts = await prisma.shiftBroadcast.findMany({
         where: {
-          shift: { organizationId: req.user!.organizationId },
+          shift: { organizationId: req.user!.organizationId, status: 'OPEN' },
           status: 'OPEN',
           OR: [
             { expiresAt: null },
@@ -604,17 +604,56 @@ export class ShiftController {
       );
     }
 
+    const workerId = req.user!.id;
+    const shiftId = req.params.shiftId;
+
     const assignment = await prisma.shiftAssignment.updateMany({
       where: {
-        shiftId: req.params.shiftId,
-        workerId: req.user!.id,
+        shiftId,
+        workerId,
         status: 'ASSIGNED',
       },
       data: { status: 'ACCEPTED', acceptedAt: new Date() },
     });
 
     if (assignment.count === 0) {
-      throw new AppError('Assignment not found or already processed', 400, 'INVALID_ACTION');
+      // No pre-existing assignment — check for a broadcast targeting this worker
+      const broadcast = await prisma.shiftBroadcast.findFirst({
+        where: { shiftId },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (!broadcast) {
+        throw new AppError('No broadcast found for this shift', 400, 'INVALID_ACTION');
+      }
+
+      if (broadcast.status === 'FILLED') {
+        throw new AppError('This shift has already been filled by another worker', 409, 'SHIFT_ALREADY_FILLED');
+      }
+
+      if (broadcast.status === 'EXPIRED' || (broadcast.expiresAt && broadcast.expiresAt < new Date())) {
+        throw new AppError('This shift broadcast has expired and is no longer available', 410, 'BROADCAST_EXPIRED');
+      }
+
+      const targets: string[] = (broadcast.filters as any)?.targetWorkerIds || [];
+      if (!targets.includes(workerId)) {
+        throw new AppError('You are not eligible to accept this shift', 403, 'NOT_ELIGIBLE');
+      }
+
+      // Create assignment and mark broadcast as filled in one transaction
+      await prisma.$transaction([
+        prisma.shiftAssignment.create({
+          data: { shiftId, workerId, status: 'ACCEPTED', acceptedAt: new Date() },
+        }),
+        prisma.shiftBroadcast.update({
+          where: { id: broadcast.id },
+          data: { status: 'FILLED', acceptedBy: workerId, acceptedAt: new Date() },
+        }),
+        prisma.shift.update({
+          where: { id: shiftId },
+          data: { status: 'FILLED' },
+        }),
+      ]);
     }
 
     ApiResponse.ok(res, 'Shift accepted');

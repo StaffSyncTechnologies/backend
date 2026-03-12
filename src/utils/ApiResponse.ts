@@ -37,4 +37,17 @@ export class ApiResponse {
   static noContent(res: Response): void {
     res.status(204).send();
   }
+
+  static error(res: Response, message: string, error?: string, statusCode: number = 400): void {
+    const response: { success: boolean; message: string; error?: string } = {
+      success: false,
+      message,
+    };
+
+    if (error !== undefined) {
+      response.error = error;
+    }
+
+    res.status(statusCode).json(response);
+  }
 }

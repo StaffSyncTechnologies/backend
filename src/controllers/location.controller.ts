@@ -4,13 +4,14 @@ import { NotFoundError, AppError } from '../utils/AppError';
 import { AuthRequest } from '../middleware/auth';
 import { ApiResponse } from '../utils/ApiResponse';
 import { z } from 'zod';
+import { GeocodingService } from '../services/geocoding';
 
 // Organization location schema (static work sites)
 const locationSchema = z.object({
   name: z.string().min(2).max(255),
   address: z.string().min(1).max(500),
-  latitude: z.number().min(-90).max(90),
-  longitude: z.number().min(-180).max(180),
+  latitude: z.number().min(-90).max(90).optional(), // Optional - will be geocoded if not provided
+  longitude: z.number().min(-180).max(180).optional(), // Optional - will be geocoded if not provided
   geofenceRadius: z.number().int().min(50).max(5000).default(100),
   contactName: z.string().max(255).optional(),
   contactPhone: z.string().max(50).optional(),
@@ -56,6 +57,32 @@ export class LocationController {
 
   create = async (req: AuthRequest, res: Response) => {
     const data = locationSchema.parse(req.body);
+    const geocodingService = GeocodingService.getInstance();
+
+    // Auto-geocode address if coordinates not provided
+    let latitude = data.latitude;
+    let longitude = data.longitude;
+    
+    if (!latitude || !longitude) {
+      try {
+        const geocoded = await geocodingService.geocodeAddress(data.address);
+        latitude = geocoded.latitude;
+        longitude = geocoded.longitude;
+        
+        console.log(`Geocoded "${data.address}" to: ${latitude}, ${longitude}`);
+      } catch (geocodingError) {
+        throw new AppError(
+          `Failed to geocode address: ${geocodingError instanceof Error ? geocodingError.message : 'Unknown error'}. Please provide coordinates manually.`,
+          400,
+          'GEOCODING_FAILED'
+        );
+      }
+    }
+
+    // Validate coordinates
+    if (!geocodingService.validateCoordinates(latitude, longitude)) {
+      throw new AppError('Invalid coordinates provided', 400, 'INVALID_COORDINATES');
+    }
 
     // If setting as primary, unset other primaries first
     if (data.isPrimary) {
@@ -68,6 +95,8 @@ export class LocationController {
     const location = await prisma.location.create({
       data: {
         ...data,
+        latitude,
+        longitude,
         organizationId: req.user!.organizationId,
       },
     });
@@ -77,13 +106,40 @@ export class LocationController {
 
   update = async (req: AuthRequest, res: Response) => {
     const data = locationSchema.partial().parse(req.body);
+    const geocodingService = GeocodingService.getInstance();
+
+    // Auto-geocode if address changed but coordinates not provided
+    let updateData = { ...data };
+    
+    if (data.address && (!data.latitude || !data.longitude)) {
+      try {
+        const geocoded = await geocodingService.geocodeAddress(data.address);
+        updateData.latitude = geocoded.latitude;
+        updateData.longitude = geocoded.longitude;
+        
+        console.log(`Geocoded updated address "${data.address}" to: ${geocoded.latitude}, ${geocoded.longitude}`);
+      } catch (geocodingError) {
+        throw new AppError(
+          `Failed to geocode address: ${geocodingError instanceof Error ? geocodingError.message : 'Unknown error'}. Please provide coordinates manually.`,
+          400,
+          'GEOCODING_FAILED'
+        );
+      }
+    }
+
+    // Validate coordinates if provided
+    if (updateData.latitude && updateData.longitude) {
+      if (!geocodingService.validateCoordinates(updateData.latitude, updateData.longitude)) {
+        throw new AppError('Invalid coordinates provided', 400, 'INVALID_COORDINATES');
+      }
+    }
 
     const result = await prisma.location.updateMany({
       where: {
         id: req.params.locationId,
         organizationId: req.user!.organizationId,
       },
-      data,
+      data: updateData,
     });
 
     if (result.count === 0) throw new NotFoundError('Location');
@@ -183,6 +239,31 @@ export class LocationController {
     });
 
     ApiResponse.ok(res, 'Worker locations retrieved', workers);
+  };
+
+  /**
+   * Validate and geocode an address (helper endpoint)
+   */
+  validateAddress = async (req: AuthRequest, res: Response) => {
+    const { address } = z.object({
+      address: z.string().min(1).max(500)
+    }).parse(req.query);
+
+    const geocodingService = GeocodingService.getInstance();
+    
+    try {
+      const result = await geocodingService.geocodeAddress(address);
+      
+      ApiResponse.ok(res, 'Address validated and geocoded', {
+        originalAddress: address,
+        formattedAddress: result.formattedAddress,
+        latitude: result.latitude,
+        longitude: result.longitude,
+        accuracy: result.accuracy
+      });
+    } catch (error) {
+      ApiResponse.error(res, 'Address validation failed', error instanceof Error ? error.message : 'Unknown error', 400);
+    }
   };
 
   /**

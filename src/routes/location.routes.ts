@@ -14,6 +14,9 @@ router.get('/:locationId', controller.getById);
 router.put('/:locationId', authorizeOps, controller.update);
 router.delete('/:locationId', authorizeAdmin, controller.delete);
 
+// Address validation helper
+router.get('/validate-address', controller.validateAddress);
+
 // Worker locations (dynamic GPS tracking)
 router.put('/worker/me', controller.updateWorkerLocation);           // Worker updates own location
 router.get('/worker/all', authorizeOps, controller.listWorkerLocations);  // Get all workers' locations
