@@ -214,6 +214,7 @@ export class ShiftController {
         },
         requiredSkills: { include: { skill: true } },
         broadcasts: true,
+        _count: { select: { assignments: true, attendances: true } },
       },
     });
 
