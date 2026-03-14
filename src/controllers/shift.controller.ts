@@ -32,23 +32,43 @@ export class ShiftController {
   private static async handleCoordinates(shiftData: any): Promise<any> {
     let finalData = { ...shiftData };
     
-    // If siteLocation is provided, always geocode it (even if coordinates exist)
-    if (shiftData.siteLocation) {
-      console.log('Geocoding site location:', shiftData.siteLocation);
+    console.log('🔍 handleCoordinates input:', {
+      siteLocation: shiftData.siteLocation,
+      siteLat: shiftData.siteLat,
+      siteLng: shiftData.siteLng,
+      latType: typeof shiftData.siteLat,
+      lngType: typeof shiftData.siteLng
+    });
+    
+    // If coordinates are provided, use them as-is (frontend geocoded)
+    if (shiftData.siteLat != null && shiftData.siteLng != null) {
+      console.log('✅ Using provided coordinates:', { lat: shiftData.siteLat, lng: shiftData.siteLng });
+      // Don't modify coordinates - use them as provided
+    }
+    // If siteLocation is provided but no coordinates, try to geocode (fallback)
+    else if (shiftData.siteLocation) {
+      console.log('⚠️ No coordinates provided, attempting backend geocoding for:', shiftData.siteLocation);
       const coordinates = await GeocodingService.geocodeAddress(shiftData.siteLocation);
       
       if (coordinates) {
         finalData.siteLat = coordinates.lat;
         finalData.siteLng = coordinates.lng;
-        console.log('Geocoded coordinates:', coordinates);
+        console.log('✅ Backend geocoded coordinates:', coordinates);
       } else {
         // Fallback to default coordinates
-        console.warn('Geocoding failed for address, using defaults');
+        console.warn('❌ Backend geocoding failed, using defaults');
         const defaultCoords = GeocodingService.getDefaultCoordinates();
         finalData.siteLat = defaultCoords.lat;
         finalData.siteLng = defaultCoords.lng;
       }
     }
+    
+    console.log('🔍 handleCoordinates output:', {
+      siteLat: finalData.siteLat,
+      siteLng: finalData.siteLng,
+      latType: typeof finalData.siteLat,
+      lngType: typeof finalData.siteLng
+    });
     
     return finalData;
   }

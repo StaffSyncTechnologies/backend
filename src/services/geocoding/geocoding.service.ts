@@ -6,7 +6,9 @@ import { prisma } from '../../lib/prisma';
  */
 export class GeocodingService {
   private static readonly NOMINATIM_BASE_URL = 'https://nominatim.openstreetmap.org/search';
-  private static readonly USER_AGENT = 'StaffSync/1.0 (staffsync@example.com)';
+  private static readonly USER_AGENT = 'StaffSync Staffing Platform (staffsync@example.com) - Geocoding for shift locations';
+  private static lastRequestTime = 0;
+  private static readonly MIN_REQUEST_INTERVAL = 1000; // 1 second between requests
 
   /**
    * Convert address to GPS coordinates
@@ -16,16 +18,28 @@ export class GeocodingService {
       return null;
     }
 
+    // Rate limiting: wait if we made a request too recently
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    if (timeSinceLastRequest < this.MIN_REQUEST_INTERVAL) {
+      const waitTime = this.MIN_REQUEST_INTERVAL - timeSinceLastRequest;
+      console.log(`Rate limiting: waiting ${waitTime}ms before geocoding request`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    this.lastRequestTime = Date.now();
+
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // Increased timeout
 
       const response = await fetch(
-        `${this.NOMINATIM_BASE_URL}?format=json&q=${encodeURIComponent(address.trim())}&limit=1`,
+        `${this.NOMINATIM_BASE_URL}?format=json&q=${encodeURIComponent(address.trim())}&limit=1&addressdetails=1`,
         {
           headers: {
             'User-Agent': this.USER_AGENT,
             'Accept': 'application/json',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://staffsync.example.com',
           },
           signal: controller.signal,
         }
