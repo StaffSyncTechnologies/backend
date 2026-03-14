@@ -322,7 +322,8 @@ export class ShiftController {
     // Handle coordinates using helper function
     const finalData = await ShiftController.handleCoordinates(data);
 
-    const shift = await prisma.shift.updateMany({
+    // First update the shift
+    const updateResult = await prisma.shift.updateMany({
       where: {
         id: req.params.shiftId,
         organizationId: req.user!.organizationId,
@@ -334,9 +335,18 @@ export class ShiftController {
       },
     });
 
-    if (shift.count === 0) throw new NotFoundError('Shift');
+    if (updateResult.count === 0) throw new NotFoundError('Shift');
 
-    ApiResponse.ok(res, 'Shift updated');
+    // Then fetch and return the updated shift
+    const updatedShift = await prisma.shift.findUnique({
+      where: { id: req.params.shiftId },
+      include: {
+        clientCompany: { select: { id: true, name: true } },
+        requiredSkills: { include: { skill: true } },
+      },
+    });
+
+    ApiResponse.ok(res, 'Shift updated', updatedShift);
   };
 
   delete = async (req: AuthRequest, res: Response) => {
