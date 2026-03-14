@@ -54,8 +54,8 @@ export class WorkerController {
       where: {
         organizationId: req.user!.organizationId,
         role: 'WORKER',
+        status: status === 'BLOCKED' ? 'BLOCKED' : status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
         ...managerFilter,
-        ...(status && { status: status as any }),
         ...(search && {
           OR: [
             { fullName: { contains: search as string, mode: 'insensitive' } },

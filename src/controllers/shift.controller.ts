@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { GeocodingService } from '../services/geocoding/geocoding.service';
 import { AppError, NotFoundError } from '../utils/AppError';
 import { ApiResponse } from '../utils/ApiResponse';
 import { NotificationService } from '../services/notifications';
@@ -10,7 +11,7 @@ const createShiftSchema = z.object({
   title: z.string().min(2).max(255),
   clientCompanyId: z.string().uuid().optional(),
   locationId: z.string().uuid().optional(),
-  siteLocation: z.string().optional(),
+  siteLocation: z.string().min(2, 'Site location is required'),
   siteLat: z.number().optional(),
   siteLng: z.number().optional(),
   role: z.string().optional(),
@@ -25,6 +26,33 @@ const createShiftSchema = z.object({
 });
 
 export class ShiftController {
+  /**
+   * Helper function to handle coordinates for shift operations
+   */
+  private static async handleCoordinates(shiftData: any): Promise<any> {
+    let finalData = { ...shiftData };
+    
+    // If siteLocation is provided but coordinates are missing, geocode the address
+    if (shiftData.siteLocation && (!shiftData.siteLat || !shiftData.siteLng)) {
+      console.log('Geocoding site location:', shiftData.siteLocation);
+      const coordinates = await GeocodingService.geocodeAddress(shiftData.siteLocation);
+      
+      if (coordinates) {
+        finalData.siteLat = coordinates.lat;
+        finalData.siteLng = coordinates.lng;
+        console.log('Geocoded coordinates:', coordinates);
+      } else {
+        // Fallback to default coordinates
+        console.warn('Geocoding failed for address, using defaults');
+        const defaultCoords = GeocodingService.getDefaultCoordinates();
+        finalData.siteLat = defaultCoords.lat;
+        finalData.siteLng = defaultCoords.lng;
+      }
+    }
+    
+    return finalData;
+  }
+
   list = async (req: AuthRequest, res: Response) => {
     const { status, from, to, clientId, locationId } = req.query;
 
@@ -264,12 +292,15 @@ export class ShiftController {
     }
     // If no clientCompanyId, it's an internal organization shift
 
+    // Handle coordinates using helper function
+    const finalShiftData = await ShiftController.handleCoordinates(shiftData);
+
     const shift = await prisma.shift.create({
       data: {
-        ...shiftData,
+        ...finalShiftData,
         clientCompanyId,
-        startAt: new Date(shiftData.startAt),
-        endAt: new Date(shiftData.endAt),
+        startAt: new Date(finalShiftData.startAt),
+        endAt: new Date(finalShiftData.endAt),
         organizationId: req.user!.organizationId,
         createdBy: req.user!.id,
         requiredSkills: requiredSkillIds ? {
@@ -288,15 +319,18 @@ export class ShiftController {
   update = async (req: AuthRequest, res: Response) => {
     const data = createShiftSchema.partial().parse(req.body);
 
+    // Handle coordinates using helper function
+    const finalData = await ShiftController.handleCoordinates(data);
+
     const shift = await prisma.shift.updateMany({
       where: {
         id: req.params.shiftId,
         organizationId: req.user!.organizationId,
       },
       data: {
-        ...data,
-        ...(data.startAt && { startAt: new Date(data.startAt) }),
-        ...(data.endAt && { endAt: new Date(data.endAt) }),
+        ...finalData,
+        ...(finalData.startAt && { startAt: new Date(finalData.startAt) }),
+        ...(finalData.endAt && { endAt: new Date(finalData.endAt) }),
       },
     });
 
