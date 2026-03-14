@@ -38,6 +38,9 @@ router.post('/worker/invite', authenticate, authorizeOps, onboardingController.i
 // Worker profile save (onboarding Step 1)
 router.post('/worker/save-profile', authController.workerSaveProfile);
 
+// Worker skills save (onboarding Step 2)
+router.post('/worker/save-skills', authController.workerSaveSkills);
+
 // Worker document upload (registration Step 3)
 router.post('/worker/documents', uploadCertification, authController.workerUploadDocument);
 router.get('/worker/documents', authController.workerGetDocuments);

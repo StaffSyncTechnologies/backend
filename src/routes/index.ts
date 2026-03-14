@@ -25,7 +25,6 @@ import bankAccountRoutes from './bankAccount.routes';
 import nearbyAgencyRoutes from './nearbyAgency.routes';
 import inviteRequestRoutes from './inviteRequest.routes';
 import filesRoutes from './files.routes';
-import skillDebugRoutes from './skillDebug.routes';
 import { matchingRouter } from '../services/matching';
 import { noShowPredictionRouter } from '../services/noShowPrediction';
 import { nearbyWorkerRankingRouter } from '../services/nearbyWorkerRanking';
@@ -90,8 +89,5 @@ router.use('/no-show', noShowPredictionRouter);
 
 // Nearby Worker Ranking routes
 router.use('/nearby', nearbyWorkerRankingRouter);
-
-// Debug routes (temporary - remove in production)
-router.use('/debug/skills', skillDebugRoutes);
 
 export default router;

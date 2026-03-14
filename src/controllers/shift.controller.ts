@@ -32,8 +32,8 @@ export class ShiftController {
   private static async handleCoordinates(shiftData: any): Promise<any> {
     let finalData = { ...shiftData };
     
-    // If siteLocation is provided but coordinates are missing, geocode the address
-    if (shiftData.siteLocation && (!shiftData.siteLat || !shiftData.siteLng)) {
+    // If siteLocation is provided, always geocode it (even if coordinates exist)
+    if (shiftData.siteLocation) {
       console.log('Geocoding site location:', shiftData.siteLocation);
       const coordinates = await GeocodingService.geocodeAddress(shiftData.siteLocation);
       

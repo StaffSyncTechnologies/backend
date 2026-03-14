@@ -1729,6 +1729,45 @@ export class AuthController {
   };
 
   /**
+   * Worker Save Skills (Onboarding Step 3)
+   */
+  workerSaveSkills = async (req: Request, res: Response) => {
+    const data = z.object({
+      email: z.string().email(),
+      skillIds: z.array(z.string()).min(1, 'Please select at least one skill'),
+    }).parse(req.body);
+
+    const worker = await prisma.user.findFirst({
+      where: { email: { equals: data.email, mode: 'insensitive' }, role: 'WORKER' },
+    });
+
+    if (!worker) {
+      throw new AppError('Worker not found', 404, 'WORKER_NOT_FOUND');
+    }
+
+    // Delete existing skills (if any) and create new ones
+    await prisma.$transaction(async (tx) => {
+      // Remove existing skill relationships
+      await tx.workerSkill.deleteMany({
+        where: { workerId: worker.id },
+      });
+
+      // Create new skill relationships
+      if (data.skillIds.length > 0) {
+        await tx.workerSkill.createMany({
+          data: data.skillIds.map((skillId: string) => ({
+            workerId: worker.id,
+            skillId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    });
+
+    ApiResponse.ok(res, 'Skills saved successfully');
+  };
+
+  /**
    * Complete worker onboarding (Step 4 - final)
    */
   workerCompleteOnboarding = async (req: Request, res: Response) => {
