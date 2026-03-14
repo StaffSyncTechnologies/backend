@@ -15,6 +15,7 @@ export const errorHandler = (
     return res.status(400).json({
       success: false,
       error: 'Validation failed',
+      code: 'VALIDATION_ERROR',
       details: err.errors.map((e) => ({
         field: e.path.join('.'),
         message: e.message,
@@ -35,6 +36,22 @@ export const errorHandler = (
   if (err.name === 'PrismaClientKnownRequestError') {
     const prismaError = err as any;
     if (prismaError.code === 'P2002') {
+      // Unique constraint violation
+      const target = prismaError.meta?.target as string[] | undefined;
+      if (target?.includes('email')) {
+        return res.status(409).json({
+          success: false,
+          error: 'Email address already registered',
+          code: 'EMAIL_ALREADY_EXISTS',
+        });
+      }
+      if (target?.includes('phone')) {
+        return res.status(409).json({
+          success: false,
+          error: 'Phone number already registered',
+          code: 'PHONE_ALREADY_EXISTS',
+        });
+      }
       return res.status(409).json({
         success: false,
         error: 'A record with this value already exists',
@@ -48,6 +65,30 @@ export const errorHandler = (
         code: 'NOT_FOUND',
       });
     }
+    if (prismaError.code === 'P2003') {
+      return res.status(400).json({
+        success: false,
+        error: 'Foreign key constraint violation',
+        code: 'FOREIGN_KEY_VIOLATION',
+      });
+    }
+  }
+
+  // JWT errors
+  if (err.name === 'JsonWebTokenError') {
+    return res.status(401).json({
+      success: false,
+      error: 'Invalid authentication token',
+      code: 'INVALID_TOKEN',
+    });
+  }
+  
+  if (err.name === 'TokenExpiredError') {
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication token expired',
+      code: 'TOKEN_EXPIRED',
+    });
   }
 
   // Default error
@@ -57,6 +98,7 @@ export const errorHandler = (
     error: process.env.NODE_ENV === 'production' 
       ? 'Internal server error' 
       : err.message,
+    code: process.env.NODE_ENV === 'production' ? 'INTERNAL_ERROR' : 'SERVER_ERROR',
     ...(process.env.NODE_ENV !== 'production' && { stack: err.stack }),
   });
 };

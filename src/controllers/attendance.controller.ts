@@ -348,7 +348,7 @@ export class AttendanceController {
         workerId,
         shift: {
           startAt: { gte: startOfDay },
-          endAt: { lte: endOfDay },
+          endAt: { lte: endOfDay, gt: now }, // Only include shifts that haven't ended yet
         },
       },
       include: {

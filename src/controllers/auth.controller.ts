@@ -373,7 +373,7 @@ export class AuthController {
     });
 
     if (!user) {
-      throw new AppError('Account not found', 404, 'NOT_FOUND');
+      throw new AppError('Account not found', 404, 'ACCOUNT_NOT_FOUND');
     }
 
     // Look up OTP using DB email (correct casing)
@@ -381,12 +381,16 @@ export class AuthController {
       where: { email: user.email },
     });
 
-    if (!otpRecord || otpRecord.code !== code) {
-      throw new AppError('Invalid verification code', 400, 'INVALID_CODE');
+    if (!otpRecord) {
+      throw new AppError('No verification code found. Please request a new one.', 400, 'OTP_NOT_FOUND');
     }
 
     if (otpRecord.expiresAt < new Date()) {
-      throw new AppError('Verification code expired', 400, 'CODE_EXPIRED');
+      throw new AppError('Verification code expired. Please request a new one.', 400, 'OTP_EXPIRED');
+    }
+
+    if (otpRecord.code !== code) {
+      throw new AppError('Invalid verification code', 400, 'INVALID_OTP');
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 12);
@@ -1262,16 +1266,22 @@ export class AuthController {
     });
 
     if (!user || !user.passwordHash) {
-      throw new AppError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
+      throw new AppError('No account found with this email address', 401, 'USER_NOT_FOUND');
     }
 
     const isValid = await bcrypt.compare(data.password, user.passwordHash);
     if (!isValid) {
-      throw new AppError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
+      throw new AppError('Incorrect password. Please try again.', 401, 'INCORRECT_PASSWORD');
     }
 
     if (user.status !== 'ACTIVE') {
-      throw new AppError('Account suspended. Please contact your agency.', 403, 'ACCOUNT_SUSPENDED');
+      if (user.status === 'SUSPENDED') {
+        throw new AppError('Account suspended. Please contact your agency.', 403, 'ACCOUNT_SUSPENDED');
+      } else if (user.status === 'PENDING') {
+        throw new AppError('Account not yet activated. Please complete onboarding.', 403, 'ACCOUNT_PENDING');
+      } else {
+        throw new AppError('Account not active. Please contact your agency.', 403, 'ACCOUNT_INACTIVE');
+      }
     }
 
     await prisma.user.update({
@@ -1325,7 +1335,7 @@ export class AuthController {
     });
 
     if (!user) {
-      throw new AppError('Account not found', 404, 'NOT_FOUND');
+      throw new AppError('Account not found', 404, 'ACCOUNT_NOT_FOUND');
     }
 
     // Find OTP record using DB email

@@ -119,7 +119,7 @@ export class ShiftController {
           requiredSkills: { include: { skill: true } },
           _count: { select: { assignments: true, attendances: true } },
         },
-        orderBy: { startAt: 'asc' },
+        orderBy: { startAt: 'desc' },
       });
 
       return ApiResponse.ok(res, 'Shifts retrieved', shifts);
@@ -143,7 +143,7 @@ export class ShiftController {
         requiredSkills: { include: { skill: true } },
         _count: { select: { assignments: true, attendances: true } },
       },
-      orderBy: { startAt: 'asc' },
+      orderBy: { startAt: 'desc' },
     });
 
     ApiResponse.ok(res, 'Shifts retrieved', shifts);
