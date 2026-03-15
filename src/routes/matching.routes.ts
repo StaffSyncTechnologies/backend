@@ -9,15 +9,20 @@ const matchingService = new SmartMatchingService();
  * Get best matching workers for a specific shift
  */
 router.get('/shifts/:shiftId/workers', async (req, res, next) => {
+  console.log('🔍 MATCHING ROUTE: /shifts/:shiftId/workers called with:', req.params, req.query);
   try {
     const { shiftId } = req.params;
     const { limit = 20, minScore = 60, includeUnavailable = false } = req.query;
+
+    console.log('🔍 MATCHING ROUTE: Processing request for shiftId:', shiftId);
 
     const matches = await matchingService.getBestWorkersForShift(shiftId, {
       limit: Number(limit),
       minScore: Number(minScore),
       includeUnavailable: includeUnavailable === 'true',
     });
+
+    console.log('🔍 MATCHING ROUTE: Found', matches.length, 'matches');
 
     res.json({
       success: true,
@@ -28,6 +33,7 @@ router.get('/shifts/:shiftId/workers', async (req, res, next) => {
       },
     });
   } catch (error) {
+    console.log('🔍 MATCHING ROUTE: Error:', error);
     next(error);
   }
 });
@@ -126,6 +132,7 @@ router.post('/suggest/:shiftId', async (req, res, next) => {
  * Health check for matching service
  */
 router.get('/health', (req, res) => {
+  console.log('🔍 MATCHING ROUTE: /health called');
   res.json({
     success: true,
     service: 'Smart Matching Engine',
