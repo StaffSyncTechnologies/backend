@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { SmartMatchingService } from '../services/matching/service';
+import { prisma } from '../lib/prisma';
 
 const router = Router();
 const matchingService = new SmartMatchingService();
@@ -138,6 +139,71 @@ router.post('/suggest/:shiftId', async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+});
+
+/**
+ * GET /api/matching/debug
+ * Debug endpoint to check database contents
+ */
+router.get('/debug', async (req, res) => {
+  console.log('🔍 MATCHING ROUTE: /debug called');
+  try {
+    // Check total workers
+    const totalWorkers = await prisma.user.count({
+      where: { role: 'WORKER', status: 'ACTIVE' }
+    });
+
+    // Check workers with availability
+    const workersWithAvailability = await prisma.user.count({
+      where: { 
+        role: 'WORKER', 
+        status: 'ACTIVE',
+        workerAvailability: {
+          some: {
+            isAvailable: true,
+          },
+        },
+      }
+    });
+
+    // Check total shifts
+    const totalShifts = await prisma.shift.count({
+      where: { status: 'OPEN' }
+    });
+
+    // Check if the specific shift exists
+    const specificShift = await prisma.shift.findUnique({
+      where: { id: '80617c0a-9792-42b1-a913-7df00ea4a150' },
+      include: {
+        requiredSkills: true,
+      }
+    });
+
+    console.log('🔍 MATCHING ROUTE: Debug data:', {
+      totalWorkers,
+      workersWithAvailability,
+      totalShifts,
+      specificShiftExists: !!specificShift,
+      specificShift,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        totalWorkers,
+        workersWithAvailability,
+        totalShifts,
+        specificShiftExists: !!specificShift,
+        specificShift,
+      },
+    });
+  } catch (error: any) {
+    console.log('🔍 MATCHING ROUTE: Debug error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
   }
 });
 
