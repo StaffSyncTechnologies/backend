@@ -15,7 +15,11 @@ router.get('/shifts/:shiftId/workers', async (req, res, next) => {
     const { limit = 20, minScore = 60, includeUnavailable = false } = req.query;
 
     console.log('🔍 MATCHING ROUTE: Processing request for shiftId:', shiftId);
+    console.log('🔍 MATCHING ROUTE: Query params:', { limit, minScore, includeUnavailable });
 
+    // First, let's just return a simple response to see if the route works
+    console.log('🔍 MATCHING ROUTE: About to call matching service...');
+    
     const matches = await matchingService.getBestWorkersForShift(shiftId, {
       limit: Number(limit),
       minScore: Number(minScore),
@@ -24,16 +28,26 @@ router.get('/shifts/:shiftId/workers', async (req, res, next) => {
 
     console.log('🔍 MATCHING ROUTE: Found', matches.length, 'matches');
 
-    res.json({
+    const response = {
       success: true,
       data: {
         shiftId,
         matches: matches,
         total: matches.length,
       },
+    };
+    
+    console.log('🔍 MATCHING ROUTE: Sending response:', response);
+    res.json(response);
+    
+  } catch (error: any) {
+    console.log('🔍 MATCHING ROUTE: Error occurred:', error);
+    console.log('🔍 MATCHING ROUTE: Error stack:', error.stack);
+    console.log('🔍 MATCHING ROUTE: Error details:', {
+      name: error.name,
+      message: error.message,
+      code: error.code,
     });
-  } catch (error) {
-    console.log('🔍 MATCHING ROUTE: Error:', error);
     next(error);
   }
 });
