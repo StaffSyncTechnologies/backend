@@ -108,6 +108,10 @@ export class SmartMatchingService {
   ): Promise<MatchingResult[]> {
     const { limit = 20, minScore = 60, includeUnavailable = false } = options;
 
+    // DEBUG: Add logging
+    console.log('🔍 DEBUG: Starting worker matching for shift:', shiftId);
+    console.log('🔍 DEBUG: Options:', { limit, minScore, includeUnavailable });
+
     // Get shift details
     const shift = await prisma.shift.findUnique({
       where: { id: shiftId },
@@ -117,8 +121,49 @@ export class SmartMatchingService {
       },
     });
 
+    console.log('🔍 DEBUG: Shift found:', shift ? 'YES' : 'NO');
+    if (shift) {
+      console.log('🔍 DEBUG: Shift details:', {
+        id: shift.id,
+        title: shift.title,
+        requiredSkills: shift.requiredSkills?.length || 0,
+        payRate: shift.payRate,
+        startAt: shift.startAt,
+      });
+    }
+
     if (!shift) {
       throw new Error('Shift not found');
+    }
+
+    // DEBUG: Check worker availability conditions
+    if (!includeUnavailable) {
+      console.log('🔍 DEBUG: Checking worker availability...');
+      
+      // Check total workers
+      const totalWorkers = await prisma.user.count({
+        where: { role: 'WORKER', status: 'ACTIVE' }
+      });
+      console.log('🔍 DEBUG: Total active workers:', totalWorkers);
+      
+      // Check workers with availability
+      const workersWithAvailability = await prisma.user.count({
+        where: { 
+          role: 'WORKER', 
+          status: 'ACTIVE',
+          workerAvailability: {
+            some: {
+              isAvailable: true,
+            },
+          },
+        }
+      });
+      console.log('🔍 DEBUG: Workers with availability:', workersWithAvailability);
+      
+      if (workersWithAvailability === 0) {
+        console.log('🔍 DEBUG: ISSUE: No workers have availability marked as true!');
+        console.log('🔍 DEBUG: Try setting includeUnavailable=true to see all workers');
+      }
     }
 
     // Get available workers
@@ -145,17 +190,54 @@ export class SmartMatchingService {
       take: limit * 2, // Get more to filter by score
     });
 
+    console.log('🔍 DEBUG: Workers found in query:', workers.length);
+    
+    if (workers.length > 0) {
+      console.log('🔍 DEBUG: Sample worker data:', {
+        id: workers[0].id,
+        fullName: workers[0].fullName,
+        skillsCount: workers[0].workerSkills?.length || 0,
+        hasLocation: !!workers[0].workerLocation,
+        hasProfile: !!workers[0].workerProfile,
+        availabilityCount: workers[0].workerAvailability?.length || 0,
+      });
+    }
+
     // Transform data
     const shiftRequirement = this.transformShiftFromDB(shift);
     const workerProfiles = workers.map(worker => this.transformWorkerFromDB(worker));
 
+    console.log('🔍 DEBUG: Shift requirement:', {
+      requiredSkills: shiftRequirement.requiredSkills,
+      location: shiftRequirement.location,
+      payRate: shiftRequirement.compensation.hourlyRate,
+    });
+
+    console.log('🔍 DEBUG: Sample worker profile:', workerProfiles[0] || 'NO WORKERS');
+
     // Get matches
     const matches = await this.matchingEngine.matchWorkersToShift(workerProfiles, shiftRequirement);
     
+    console.log('🔍 DEBUG: Raw matches from engine:', matches.length);
+    
+    if (matches.length > 0) {
+      console.log('🔍 DEBUG: Sample match scores:', matches.map(m => ({
+        workerId: m.workerId,
+        overallScore: m.overallScore,
+        skillMatch: m.breakdown.skillMatch,
+        locationMatch: m.breakdown.locationMatch,
+      })));
+    }
+    
     // Filter and limit results
-    return matches
+    const filteredMatches = matches
       .filter(match => match.overallScore >= minScore)
       .slice(0, limit);
+    
+    console.log('🔍 DEBUG: Matches after minScore filter (>=', minScore, '):', filteredMatches.length);
+    console.log('🔍 DEBUG: Final matches:', filteredMatches);
+
+    return filteredMatches;
   }
 
   /**
