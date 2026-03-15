@@ -48,9 +48,15 @@ export class AttendanceController {
    * POST /api/attendance/:shiftId/clock-in
    */
   clockIn = async (req: AuthRequest, res: Response) => {
+    console.log('🔍 CLOCK-IN: Request received');
+    console.log('🔍 CLOCK-IN: Params:', req.params);
+    console.log('🔍 CLOCK-IN: Body:', req.body);
+    console.log('🔍 CLOCK-IN: User:', req.user ? { id: req.user.id, role: req.user.role, orgId: req.user.organizationId } : 'No user');
+    
     const { shiftId } = req.params;
     const workerId = req.user!.id;
     const data = clockInSchema.parse(req.body);
+    console.log('🔍 CLOCK-IN: Parsed data:', data);
 
     // Get shift with location info
     const shift = await prisma.shift.findFirst({
