@@ -104,6 +104,7 @@ export interface GetMeResponse {
   fullName: string;
   role: UserRole;
   phone: string | null;
+  profilePicUrl?: string | null;
   organization: AuthOrganizationResponse;
   workerProfile?: Record<string, unknown>;
 }
