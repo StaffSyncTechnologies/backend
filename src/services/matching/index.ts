@@ -1,6 +1,5 @@
 export { SmartMatchingEngine } from './engine';
 export { SmartMatchingService } from './service';
-export { matchingRouter } from './routes';
 export * from './types';
 
 // Service configuration
