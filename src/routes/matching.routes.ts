@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { SmartMatchingService } from './service';
+import { SmartMatchingService } from '../services/matching/service';
 
 const router = Router();
 const matchingService = new SmartMatchingService();
@@ -134,4 +134,4 @@ router.get('/health', (req, res) => {
   });
 });
 
-export { router as matchingRouter };
+export default router;

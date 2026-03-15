@@ -25,7 +25,7 @@ import bankAccountRoutes from './bankAccount.routes';
 import nearbyAgencyRoutes from './nearbyAgency.routes';
 import inviteRequestRoutes from './inviteRequest.routes';
 import filesRoutes from './files.routes';
-import { matchingRouter } from '../services/matching';
+import matchingRoutes from './matching.routes';
 import { noShowPredictionRouter } from '../services/noShowPrediction';
 import { nearbyWorkerRankingRouter } from '../services/nearbyWorkerRanking';
 
@@ -82,7 +82,7 @@ router.use('/worker', workerMembershipRoutes);
 router.use('/bank-account', bankAccountRoutes);
 
 // Smart Matching routes
-router.use('/matching', matchingRouter);
+router.use('/matching', matchingRoutes);
 
 // No-Show Prediction routes
 router.use('/no-show', noShowPredictionRouter);
