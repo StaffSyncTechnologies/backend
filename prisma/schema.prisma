@@ -476,6 +476,7 @@ model ClientCompany {
   clientUsers         ClientUser[]
   clientPayRates      ClientPayRate[]
   clientAgencyAssignments ClientAgencyAssignment[]
+  chatRooms           ChatRoom[]      @relation("ClientCompanyChats")
 
   @@map("client_company")
 }
@@ -613,6 +614,7 @@ model User {
   bankAccount             WorkerBankAccount?
   inviteRequestsReviewed  InviteCodeRequest[]         @relation("InviteRequestReviewer")
   agencyInvitations        ClientAgencyAssignment[]    @relation("AgencyInviter")
+  agencyChatRooms          ChatRoom[]                  @relation("AgencyChats")
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -1272,6 +1274,7 @@ model ClientUser {
 
   clientCompany   ClientCompany   @relation(fields: [clientCompanyId], references: [id], onDelete: Cascade)
   agencyAssignments ClientAgencyAssignment[]
+  chatRooms       ChatRoom[]      @relation("ClientChats")
 
   @@unique([clientCompanyId, email])
   @@map("client_user")
@@ -1307,20 +1310,38 @@ enum MessageStatus {
   READ
 }
 
+enum ChatRoomType {
+  HR_WORKER
+  CLIENT_AGENCY
+}
+
 model ChatRoom {
   id              String        @id @default(uuid())
   organizationId  String        @map("organization_id")
-  hrUserId        String        @map("hr_user_id")
-  workerId        String        @map("worker_id")
+  type            ChatRoomType  @default(HR_WORKER)
+  
+  // HR-Worker chat fields
+  hrUserId        String?       @map("hr_user_id")
+  workerId        String?       @map("worker_id")
+  
+  // Client-Agency chat fields
+  clientUserId    String?       @map("client_user_id")
+  agencyUserId    String?       @map("agency_user_id")
+  clientCompanyId String?       @map("client_company_id")
+  
   lastMessageAt   DateTime?     @map("last_message_at")
   createdAt       DateTime      @default(now()) @map("created_at")
 
   organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  hrUser          User          @relation("HRChats", fields: [hrUserId], references: [id], onDelete: Cascade)
-  worker          User          @relation("WorkerChats", fields: [workerId], references: [id], onDelete: Cascade)
+  hrUser          User?         @relation("HRChats", fields: [hrUserId], references: [id], onDelete: Cascade)
+  worker          User?         @relation("WorkerChats", fields: [workerId], references: [id], onDelete: Cascade)
+  clientUser      ClientUser?   @relation("ClientChats", fields: [clientUserId], references: [id], onDelete: Cascade)
+  agencyUser      User?         @relation("AgencyChats", fields: [agencyUserId], references: [id], onDelete: Cascade)
+  clientCompany   ClientCompany? @relation("ClientCompanyChats", fields: [clientCompanyId], references: [id], onDelete: Cascade)
   messages        ChatMessage[]
 
-  @@unique([hrUserId, workerId])
+  @@unique([hrUserId, workerId]) // For HR-Worker rooms
+  @@unique([clientUserId, agencyUserId]) // For Client-Agency rooms
   @@index([organizationId])
   @@map("chat_room")
 }
@@ -1329,13 +1350,14 @@ model ChatMessage {
   id          String        @id @default(uuid())
   chatRoomId  String        @map("chat_room_id")
   senderId    String        @map("sender_id")
+  senderType  String        @map("sender_type") // 'user' or 'client_user'
   content     String
   status      MessageStatus @default(SENT)
   createdAt   DateTime      @default(now()) @map("created_at")
   readAt      DateTime?     @map("read_at")
 
   chatRoom    ChatRoom      @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
-  sender      User          @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  senderUser  User?         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([chatRoomId, createdAt])
   @@map("chat_message")
