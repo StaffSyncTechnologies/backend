@@ -235,8 +235,7 @@ enum InvoiceStatus {
 
 enum ClientUserRole {
   CLIENT_ADMIN
-  CLIENT_MANAGER
-  CLIENT_VIEWER
+  CLIENT_USER
 }
 
 enum GeofenceMode {
@@ -476,6 +475,7 @@ model ClientCompany {
   invoices            Invoice[]
   clientUsers         ClientUser[]
   clientPayRates      ClientPayRate[]
+  clientAgencyAssignments ClientAgencyAssignment[]
 
   @@map("client_company")
 }
@@ -612,6 +612,7 @@ model User {
   orgRTWs                 WorkerOrgRTW[]              @relation("WorkerOrgRTWs")
   bankAccount             WorkerBankAccount?
   inviteRequestsReviewed  InviteCodeRequest[]         @relation("InviteRequestReviewer")
+  agencyInvitations        ClientAgencyAssignment[]    @relation("AgencyInviter")
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -1260,7 +1261,7 @@ model ClientUser {
   fullName        String          @map("full_name") @db.VarChar(255)
   jobTitle        String?         @map("job_title") @db.VarChar(100)
   passwordHash    String?         @map("password_hash")
-  role            ClientUserRole  @default(CLIENT_VIEWER)
+  role            ClientUserRole
   status          UserStatus      @default(ACTIVE)
   emailVerified   Boolean         @default(false) @map("email_verified")
   emailVerificationToken String?   @map("email_verification_token") @db.VarChar(64)
@@ -1270,9 +1271,30 @@ model ClientUser {
   createdAt       DateTime        @default(now()) @map("created_at")
 
   clientCompany   ClientCompany   @relation(fields: [clientCompanyId], references: [id], onDelete: Cascade)
+  agencyAssignments ClientAgencyAssignment[]
 
   @@unique([clientCompanyId, email])
   @@map("client_user")
+}
+
+model ClientAgencyAssignment {
+  id              String        @id @default(uuid())
+  clientUserId    String        @map("client_user_id")
+  clientCompanyId String        @map("client_company_id")
+  isPrimary       Boolean       @default(false) @map("is_primary")
+  assignedAt      DateTime      @default(now()) @map("assigned_at")
+  status          ClientStatus  @default(ACTIVE)
+  invitedBy       String?       @map("invited_by")
+  joinedAt        DateTime?     @map("joined_at")
+
+  clientUser      ClientUser    @relation(fields: [clientUserId], references: [id], onDelete: Cascade)
+  clientCompany   ClientCompany @relation(fields: [clientCompanyId], references: [id], onDelete: Cascade)
+  inviter         User?         @relation("AgencyInviter", fields: [invitedBy], references: [id])
+
+  @@unique([clientUserId, clientCompanyId])
+  @@index([clientUserId])
+  @@index([clientCompanyId])
+  @@map("client_agency_assignment")
 }
 
 // ============================================================

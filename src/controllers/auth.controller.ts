@@ -205,8 +205,6 @@ export class AuthController {
   };
 
   getMe = async (req: AuthRequest, res: Response) => {
-    console.log('getMe called for user:', req.user!.id);
-    
     const user = await prisma.user.findUnique({
       where: { id: req.user!.id },
       include: {
@@ -218,8 +216,6 @@ export class AuthController {
     if (!user) {
       throw new AppError('User not found', 404, 'NOT_FOUND');
     }
-
-    console.log('User profilePicUrl:', user.profilePicUrl);
 
     const response: GetMeResponse = {
       id: user.id,
@@ -238,7 +234,6 @@ export class AuthController {
       ...(user.workerProfile && { workerProfile: user.workerProfile }),
     };
 
-    console.log('getMe response profilePicUrl:', response.profilePicUrl);
     ApiResponse.ok(res, 'User retrieved', response);
   };
 

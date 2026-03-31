@@ -12,6 +12,10 @@ router.post('/auth/forgot-password', controller.forgotPassword);
 // All routes below require client authentication
 router.use(authenticateClient);
 
+// Agency management
+router.get('/agencies', controller.getAgencies);
+router.post('/switch-agency', controller.switchAgency);
+
 // Dashboard
 router.get('/dashboard', controller.getDashboard);
 

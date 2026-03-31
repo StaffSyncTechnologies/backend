@@ -12,12 +12,12 @@ import { EmailService } from '../services/notifications/email.service';
 
 const workerRequestSchema = z.object({
   locationId: z.string().uuid().optional(),
-  siteLocation: z.string().optional(),
-  role: z.string(),
-  date: z.string(),
-  startTime: z.string(),
-  endTime: z.string(),
-  workersNeeded: z.number().min(1),
+  siteLocation: z.string().min(2, 'Site location is required'),
+  role: z.string().min(1, 'Role is required'),
+  date: z.string().min(1, 'Date is required'),
+  startTime: z.string().min(1, 'Start time is required'),
+  endTime: z.string().min(1, 'End time is required'),
+  workersNeeded: z.number().min(1, 'At least one worker is required'),
   requiredSkillIds: z.array(z.string().uuid()).optional(),
   notes: z.string().optional(),
 });
@@ -30,7 +30,14 @@ export class ClientController {
 
     const clientUser = await prisma.clientUser.findFirst({
       where: { email },
-      include: { clientCompany: true },
+      include: {
+        agencyAssignments: {
+          include: {
+            clientCompany: true,
+          },
+          where: { status: 'ACTIVE' },
+        },
+      },
     });
 
     if (!clientUser || !clientUser.passwordHash) {
@@ -46,15 +53,24 @@ export class ClientController {
       throw new AppError('Account inactive', 403, 'ACCOUNT_INACTIVE');
     }
 
+    if (!clientUser.agencyAssignments || clientUser.agencyAssignments.length === 0) {
+      throw new AppError('No active agency assignments found', 403, 'NO_AGENCIES');
+    }
+
     await prisma.clientUser.update({
       where: { id: clientUser.id },
       data: { lastLoginAt: new Date() },
     });
 
+    // Find primary agency or use first one
+    const primaryAgency = clientUser.agencyAssignments?.find(
+      assignment => assignment.isPrimary
+    ) || clientUser.agencyAssignments?.[0];
+
     const token = jwt.sign(
       {
         clientUserId: clientUser.id,
-        clientCompanyId: clientUser.clientCompanyId,
+        clientCompanyId: primaryAgency.clientCompanyId, // Primary agency for backward compatibility
       },
       config.jwt.secret,
       { expiresIn: config.jwt.expiresIn } as SignOptions
@@ -70,9 +86,16 @@ export class ClientController {
           fullName: clientUser.fullName,
           role: clientUser.role,
         },
-        company: {
-          id: clientUser.clientCompany.id,
-          name: clientUser.clientCompany.name,
+        agencies: clientUser.agencyAssignments.map(assignment => ({
+          id: assignment.clientCompany.id,
+          name: assignment.clientCompany.name,
+          isPrimary: assignment.isPrimary,
+          organizationId: assignment.clientCompany.organizationId,
+        })),
+        currentAgency: {
+          id: primaryAgency.clientCompany.id,
+          name: primaryAgency.clientCompany.name,
+          organizationId: primaryAgency.clientCompany.organizationId,
         },
       },
     });
@@ -83,12 +106,95 @@ export class ClientController {
     res.json({ success: true, message: 'If email exists, reset link sent' });
   };
 
+  switchAgency = async (req: ClientAuthRequest, res: Response) => {
+    const { clientCompanyId } = req.body;
+
+    if (!clientCompanyId) {
+      throw new AppError('Agency ID is required', 400, 'AGENCY_ID_REQUIRED');
+    }
+
+    // Verify the user has access to this agency
+    const agencyAssignment = req.clientUser!.agencies.find(
+      agency => agency.clientCompanyId === clientCompanyId
+    );
+
+    if (!agencyAssignment) {
+      throw new AppError('Agency not found or not accessible', 403, 'AGENCY_NOT_ACCESSIBLE');
+    }
+
+    // Generate new token with selected agency
+    const token = jwt.sign(
+      {
+        clientUserId: req.clientUser!.id,
+        clientCompanyId: clientCompanyId,
+      },
+      config.jwt.secret,
+      { expiresIn: config.jwt.expiresIn } as SignOptions
+    );
+
+    res.json({
+      success: true,
+      data: {
+        token,
+        currentAgency: {
+          id: agencyAssignment.clientCompanyId,
+          name: agencyAssignment.name,
+          organizationId: agencyAssignment.organizationId,
+        },
+      },
+    });
+  };
+
+  getAgencies = async (req: ClientAuthRequest, res: Response) => {
+    res.json({
+      success: true,
+      data: {
+        agencies: req.clientUser!.agencies,
+        currentAgency: {
+          id: req.clientUser!.clientCompanyId,
+          organizationId: req.clientUser!.organizationId,
+        },
+      },
+    });
+  };
+
   // ==================== DASHBOARD ====================
 
   getDashboard = async (req: ClientAuthRequest, res: Response) => {
     const clientCompanyId = req.clientUser!.clientCompanyId;
 
-    const [activeShifts, upcomingShifts, pendingTimesheets, recentInvoices] = await Promise.all([
+    // Date ranges for calculations
+    const today = new Date();
+    const todayStart = new Date(today);
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
+
+    // Week start and end for shift fill rate calculation
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - today.getDay());
+    weekStart.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
+
+    // Month start and end for total money spent
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    monthStart.setHours(0, 0, 0, 0);
+    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    monthEnd.setHours(23, 59, 59, 999);
+
+    const [
+      activeShifts,
+      upcomingShifts,
+      pendingTimesheets,
+      recentInvoices,
+      totalShiftsCount,
+      totalMoneySpentResult,
+      shiftFillRateData,
+      workersAvailabilityData,
+      recentActivityData
+    ] = await Promise.all([
       // Active shifts (in progress today)
       prisma.shift.count({
         where: {
@@ -128,14 +234,147 @@ export class ClientController {
           dueDate: true,
         },
       }),
+      // Total shifts for the month
+      prisma.shift.count({
+        where: {
+          clientCompanyId,
+          startAt: { gte: monthStart, lte: monthEnd },
+        },
+      }),
+      // Total money spent (approved timesheets for current month)
+      prisma.attendance.aggregate({
+        _sum: {
+          hoursWorked: true,
+        },
+        where: {
+          shift: { clientCompanyId },
+          clockOutAt: { not: null },
+          status: 'APPROVED',
+          clockInAt: { gte: monthStart, lte: monthEnd },
+        },
+      }),
+      // Shift fill rate data for the last 7 days
+      prisma.shift.findMany({
+        where: {
+          clientCompanyId,
+          startAt: { gte: weekStart, lte: weekEnd },
+        },
+        select: {
+          startAt: true,
+          workersNeeded: true,
+          _count: {
+            select: {
+              assignments: {
+                where: { status: 'ACCEPTED' }
+              }
+            }
+          }
+        },
+        orderBy: { startAt: 'asc' }
+      }),
+      // Workers availability data
+      prisma.user.findMany({
+        where: {
+          role: 'WORKER',
+          shiftAssignments: {
+            some: {
+              shift: { clientCompanyId },
+              status: 'ACCEPTED'
+            }
+          }
+        },
+        select: {
+          id: true,
+          status: true,
+          _count: {
+            select: {
+              shiftAssignments: {
+                where: {
+                  shift: {
+                    clientCompanyId,
+                    startAt: { gte: new Date() }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }),
+      // Recent activity (last 10 attendance records)
+      prisma.attendance.findMany({
+        where: {
+          shift: { clientCompanyId },
+          clockInAt: { not: null }
+        },
+        take: 10,
+        orderBy: { clockInAt: 'desc' },
+        include: {
+          worker: {
+            select: {
+              id: true,
+              fullName: true
+            }
+          },
+          shift: {
+            select: {
+              id: true,
+              title: true,
+              startAt: true,
+              endAt: true,
+              location: {
+                select: {
+                  name: true
+                }
+              }
+            }
+          }
+        }
+      })
     ]);
 
-    // Today's workers on site
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
+    // Calculate total money spent (assuming average hourly rate of £15)
+    const totalHours = Number(totalMoneySpentResult._sum.hoursWorked || 0);
+    const totalMoneySpent = totalHours * 15; // This should use actual rates from your system
 
+    // Calculate shift fill rate for each day
+    const shiftFillRate = shiftFillRateData.map((day: any) => {
+      const fillRate = day.workersNeeded > 0 
+        ? (day._count.assignments / day.workersNeeded) * 100 
+        : 0;
+      return {
+        date: day.startAt.toISOString().split('T')[0],
+        fillRate: Math.round(fillRate)
+      };
+    });
+
+    // Calculate workers availability
+    const totalWorkers = workersAvailabilityData.length;
+    const activeWorkers = workersAvailabilityData.filter((w: any) => w.status === 'ACTIVE').length;
+    const availableWorkers = workersAvailabilityData.filter((w: any) => 
+      w.status === 'ACTIVE' && w._count.shiftAssignments === 0
+    ).length;
+    const bookedWorkers = workersAvailabilityData.filter((w: any) => 
+      w._count.shiftAssignments > 0
+    ).length;
+
+    const workersAvailability = {
+      active: totalWorkers > 0 ? Math.round((activeWorkers / totalWorkers) * 100) : 0,
+      available: totalWorkers > 0 ? Math.round((availableWorkers / totalWorkers) * 100) : 0,
+      booked: totalWorkers > 0 ? Math.round((bookedWorkers / totalWorkers) * 100) : 0
+    };
+
+    // Format recent activity
+    const recentActivity = recentActivityData.map((activity: any) => ({
+      id: activity.id,
+      worker: activity.worker.fullName,
+      clockIn: activity.clockInAt,
+      clockOut: activity.clockOutAt,
+      department: activity.shift.location?.name || 'Unknown',
+      status: activity.status,
+      action: activity.status === 'PENDING' ? 'Review' : 'View'
+    }));
+
+    // Today's workers on site
     const todaysWorkers = await prisma.shiftAssignment.findMany({
       where: {
         shift: {
@@ -154,13 +393,18 @@ export class ClientController {
       success: true,
       data: {
         stats: {
-          activeShifts,
-          upcomingShifts,
+          workersOnsite: todaysWorkers.length,
+          totalShifts: totalShiftsCount,
           pendingTimesheets,
-          workersOnSiteToday: todaysWorkers.length,
+          totalMoneySpent,
+          shiftFillRate: shiftFillRate,
+          workersAvailability,
+          activeShifts,
+          upcomingShifts
         },
         todaysWorkers,
         recentInvoices,
+        recentActivity
       },
     });
   };
@@ -331,6 +575,10 @@ export class ClientController {
   };
 
   getShiftDetails = async (req: ClientAuthRequest, res: Response) => {
+    console.log('Getting shift details for ID:', req.params.shiftId);
+    console.log('Client user ID:', req.clientUser?.id);
+    console.log('Client company ID:', req.clientUser?.clientCompanyId);
+    
     const shift = await prisma.shift.findFirst({
       where: {
         id: req.params.shiftId,
@@ -351,6 +599,8 @@ export class ClientController {
       },
     });
 
+    console.log('Found shift:', shift);
+
     if (!shift) throw new NotFoundError('Shift');
 
     res.json({ success: true, data: shift });
@@ -367,6 +617,18 @@ export class ClientController {
 
     if (!client) throw new NotFoundError('Client company');
 
+    // Validate date/time combination
+    const startDateTime = new Date(`${data.date}T${data.startTime}`);
+    const endDateTime = new Date(`${data.date}T${data.endTime}`);
+    
+    if (endDateTime <= startDateTime) {
+      throw new AppError('End time must be after start time', 400, 'INVALID_TIME_RANGE');
+    }
+
+    if (startDateTime < new Date()) {
+      throw new AppError('Shift cannot be scheduled in the past', 400, 'PAST_DATE');
+    }
+
     // Create shift request
     const shift = await prisma.shift.create({
       data: {
@@ -375,13 +637,13 @@ export class ClientController {
         title: `${data.role} - ${new Date(data.date).toLocaleDateString()}`,
         role: data.role,
         siteLocation: data.siteLocation,
-        startAt: new Date(`${data.date}T${data.startTime}`),
-        endAt: new Date(`${data.date}T${data.endTime}`),
+        startAt: startDateTime,
+        endAt: endDateTime,
         workersNeeded: data.workersNeeded,
         payRate: client.defaultPayRate,
         notes: data.notes,
         status: 'OPEN',
-        createdBy: req.clientUser!.id, // This would need adjustment for client user
+        createdBy: req.clientUser!.id,
         requiredSkills: data.requiredSkillIds ? {
           create: data.requiredSkillIds.map((skillId) => ({ skillId })),
         } : undefined,

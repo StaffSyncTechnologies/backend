@@ -38,9 +38,22 @@ export const authenticate = async (
     }
 
     const decoded = jwt.verify(token, config.jwt.secret) as {
-      userId: string;
+      userId?: string;
+      clientUserId?: string;
       organizationId: string;
     };
+
+    // Debug logging
+    console.log('🔍 Auth middleware - Token decoded:', {
+      hasUserId: !!decoded.userId,
+      hasClientUserId: !!decoded.clientUserId,
+      tokenKeys: Object.keys(decoded),
+      decoded
+    });
+
+    if (!decoded.userId) {
+      throw new AppError('Invalid token structure - missing userId', 401, 'INVALID_TOKEN');
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },

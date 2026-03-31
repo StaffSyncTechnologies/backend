@@ -9,6 +9,8 @@ import locationRoutes from './location.routes';
 import onboardingRoutes from './onboarding.routes';
 import clientRoutes from './client.routes';
 import clientRegistrationRoutes from './clientRegistration.routes';
+import enhancedClientRegistrationRoutes from './enhancedClientRegistration.routes';
+import clientAgencyRoutes from './clientAgency.routes';
 import dashboardRoutes from './dashboard.routes';
 import chatRoutes from './chat.routes';
 import attendanceRoutes from './attendance.routes';
@@ -36,9 +38,11 @@ router.use('/auth', authRoutes);
 router.use('/agencies', nearbyAgencyRoutes); // Public: nearby agencies for workers without invite code
 router.use('/agencies', inviteRequestRoutes); // Public POST + Protected GET/PATCH for invite requests
 router.use('/client-registration', clientRegistrationRoutes); // Client company self-registration
+router.use('/enhanced-client-registration', enhancedClientRegistrationRoutes); // Enhanced multi-agency client registration
 router.use('/files', filesRoutes); // File proxy for private Supabase bucket
 
 // Protected routes (Agency/Admin)
+router.use('/admin', clientAgencyRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/organizations', organizationRoutes);
 router.use('/users', userRoutes);
