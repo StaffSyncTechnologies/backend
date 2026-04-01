@@ -481,6 +481,8 @@ export class ShiftController {
       }).catch((error: any) => console.error(`Failed to send email to ${worker.email}:`, error))
     );
 
+    await Promise.allSettled(emailPromises);
+
     await NotificationService.sendToMultiple(workerIds, {
       title: 'New Shift Assigned',
       body: `You've been assigned to ${shift.title} on ${shiftDate} at ${shiftTime}${shift.clientCompany ? ` - ${shift.clientCompany.name}` : ''}`,

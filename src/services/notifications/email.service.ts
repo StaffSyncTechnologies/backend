@@ -68,6 +68,7 @@ export class EmailService {
       html,
       text,
     });
+    console.log(`📧 Email sent via SMTP to ${to}, id: ${result.messageId}`);
     return result.messageId;
   }
 
