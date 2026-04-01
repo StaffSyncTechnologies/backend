@@ -1,9 +1,10 @@
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { prisma } from '../lib/prisma';
 import { GeocodingService } from '../services/geocoding/geocoding.service';
 import { AppError, NotFoundError } from '../utils/AppError';
 import { ApiResponse } from '../utils/ApiResponse';
 import { NotificationService } from '../services/notifications';
+import { EmailService } from '../services/notifications/email.service';
 import { AuthRequest } from '../middleware/auth';
 import { z } from 'zod';
 
@@ -434,6 +435,7 @@ export class ShiftController {
         startAt: true,
         endAt: true,
         siteLocation: true,
+        payRate: true,
         clientCompany: { select: { name: true } },
       },
     });
@@ -460,12 +462,31 @@ export class ShiftController {
       minute: '2-digit',
     });
 
+    // Get worker details for email notifications
+    const workers = await prisma.user.findMany({
+      where: { id: { in: workerIds } },
+      select: { id: true, fullName: true, email: true },
+    });
+
+    // Send email notifications with accept/reject links
+    const emailPromises = workers.map(worker => 
+      EmailService.sendShiftAssignmentEmail(worker.email, worker.fullName, {
+        shiftId: shift.id,
+        title: shift.title,
+        date: shiftDate,
+        time: shiftTime,
+        location: shift.siteLocation || 'TBD',
+        clientCompany: shift.clientCompany?.name,
+        payRate: shift.payRate ? Number(shift.payRate) : undefined,
+      }).catch((error: any) => console.error(`Failed to send email to ${worker.email}:`, error))
+    );
+
     await NotificationService.sendToMultiple(workerIds, {
       title: 'New Shift Assigned',
       body: `You've been assigned to ${shift.title} on ${shiftDate} at ${shiftTime}${shift.clientCompany ? ` - ${shift.clientCompany.name}` : ''}`,
       type: 'SHIFT_ASSIGNED',
       preferenceType: 'NEW_SHIFT_ALERTS',
-      channels: ['push', 'sms'],
+      channels: ['push', 'sms', 'email'],
       categoryId: 'shift_action',
       data: {
         shiftId: shift.id,
@@ -473,6 +494,9 @@ export class ShiftController {
         action: 'VIEW_SHIFT',
       },
     });
+
+    // Wait for all emails to be sent
+    await Promise.allSettled(emailPromises);
 
     ApiResponse.created(res, `${assignments.count} worker(s) assigned and notified`, { count: assignments.count });
   };
@@ -779,6 +803,253 @@ export class ShiftController {
     ApiResponse.ok(res, 'Shift declined');
   };
 
+  // Email-specific actions (for email links)
+  acceptShiftByEmail = async (req: Request, res: Response) => {
+    const { email, broadcast } = req.query;
+    const shiftId = req.params.shiftId;
+
+    if (!email || typeof email !== 'string') {
+      return res.status(400).send(ShiftController.createErrorPage('Invalid email parameter'));
+    }
+
+    try {
+      // Find user by email
+      const user = await prisma.user.findFirst({
+        where: { 
+          email: email.toLowerCase(),
+          role: 'WORKER',
+          status: 'ACTIVE',
+        },
+        select: { id: true, fullName: true, role: true, status: true, organizationId: true },
+      });
+
+      if (!user || user.role !== 'WORKER' || user.status !== 'ACTIVE') {
+        return res.status(400).send(ShiftController.createErrorPage('Invalid worker email'));
+      }
+
+      // Check RTW status before allowing acceptance
+      const workerProfile = await prisma.workerProfile.findUnique({
+        where: { userId: user.id },
+        select: { rtwStatus: true },
+      });
+
+      if (!workerProfile || workerProfile.rtwStatus !== 'APPROVED') {
+        return res.status(403).send(ShiftController.createErrorPage('Right to Work verification must be approved before accepting shifts'));
+      }
+
+      const workerId = user.id;
+
+      if (broadcast && typeof broadcast === 'string') {
+        // Handle broadcast acceptance
+        const broadcastRecord = await prisma.shiftBroadcast.findFirst({
+          where: { 
+            shiftId,
+            id: broadcast,
+            status: 'OPEN',
+          },
+        });
+
+        if (!broadcastRecord) {
+          return res.status(400).send(ShiftController.createErrorPage('Invalid or expired broadcast'));
+        }
+
+        if (broadcastRecord.status === 'FILLED') {
+          return res.status(409).send(ShiftController.createErrorPage('This shift has already been filled by another worker'));
+        }
+
+        if (broadcastRecord.expiresAt && broadcastRecord.expiresAt < new Date()) {
+          return res.status(410).send(ShiftController.createErrorPage('This shift broadcast has expired'));
+        }
+
+        const targets: string[] = (broadcastRecord.filters as any)?.targetWorkerIds || [];
+        if (!targets.includes(workerId)) {
+          return res.status(403).send(ShiftController.createErrorPage('You are not eligible to accept this shift'));
+        }
+
+        // Create assignment and mark broadcast as filled in one transaction
+        await prisma.$transaction([
+          prisma.shiftAssignment.create({
+            data: { shiftId, workerId, status: 'ACCEPTED', acceptedAt: new Date() },
+          }),
+          prisma.shiftBroadcast.update({
+            where: { id: broadcastRecord.id },
+            data: { status: 'FILLED', acceptedBy: workerId, acceptedAt: new Date() },
+          }),
+          prisma.shift.update({
+            where: { id: shiftId },
+            data: { status: 'FILLED' },
+          }),
+        ]);
+
+        return res.send(ShiftController.createSuccessPage('Shift accepted successfully!'));
+      } else {
+        // Handle direct assignment acceptance
+        const assignment = await prisma.shiftAssignment.updateMany({
+          where: {
+            shiftId,
+            workerId,
+            status: 'ASSIGNED',
+          },
+          data: { status: 'ACCEPTED', acceptedAt: new Date() },
+        });
+
+        if (assignment.count === 0) {
+          return res.status(400).send(ShiftController.createErrorPage('No valid assignment found for this worker'));
+        }
+
+        return res.send(ShiftController.createSuccessPage('Shift accepted successfully!'));
+      }
+    } catch (error) {
+      console.error('Error accepting shift via email:', error);
+      return res.status(500).send(ShiftController.createErrorPage('An error occurred while accepting the shift'));
+    }
+  };
+
+  rejectShiftByEmail = async (req: Request, res: Response) => {
+    const { email } = req.query;
+    const shiftId = req.params.shiftId;
+
+    if (!email || typeof email !== 'string') {
+      return res.status(400).send(ShiftController.createErrorPage('Invalid email parameter'));
+    }
+
+    try {
+      // Find user by email
+      const user = await prisma.user.findFirst({
+        where: { 
+          email: email.toLowerCase(),
+          role: 'WORKER',
+          status: 'ACTIVE',
+        },
+        select: { id: true, fullName: true, role: true, status: true, organizationId: true },
+      });
+
+      if (!user || user.role !== 'WORKER' || user.status !== 'ACTIVE') {
+        return res.status(400).send(ShiftController.createErrorPage('Invalid worker email'));
+      }
+
+      const workerId = user.id;
+
+      const assignment = await prisma.shiftAssignment.updateMany({
+        where: {
+          shiftId,
+          workerId,
+          status: 'ASSIGNED',
+        },
+        data: { status: 'DECLINED', declinedAt: new Date() },
+      });
+
+      if (assignment.count === 0) {
+        return res.status(400).send(ShiftController.createErrorPage('No valid assignment found for this worker'));
+      }
+
+      // Notify staff about shift decline
+      const [shift] = await Promise.all([
+        prisma.shift.findUnique({
+          where: { id: shiftId },
+          select: { title: true, startAt: true },
+        }),
+      ]);
+
+      if (shift) {
+        const staffToNotify = await prisma.user.findMany({
+          where: {
+            role: { in: ['ADMIN', 'OPS_MANAGER', 'SHIFT_COORDINATOR'] },
+            status: 'ACTIVE',
+          },
+          select: { id: true },
+        });
+
+        await NotificationService.sendToMultiple(
+          staffToNotify.map(s => s.id),
+          {
+            title: 'Shift Declined',
+            body: `${user.fullName} has declined shift "${shift.title}" on ${shift.startAt.toLocaleDateString()}`,
+            type: 'SHIFT_DECLINED',
+            preferenceType: 'NEW_SHIFT_ALERTS',
+            data: { shiftId },
+            channels: ['push'],
+          }
+        );
+      }
+
+      return res.send(ShiftController.createSuccessPage('Shift rejected successfully!'));
+    } catch (error) {
+      console.error('Error rejecting shift via email:', error);
+      return res.status(500).send(ShiftController.createErrorPage('An error occurred while rejecting the shift'));
+    }
+  };
+
+  private static createSuccessPage(message: string): string {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>StaffSync - Success</title>
+        <style>
+          body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }
+          .container { max-width: 600px; margin: 50px auto; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { padding: 30px; text-align: center; }
+          .success-icon { font-size: 48px; color: #28a745; margin-bottom: 20px; }
+          .btn { background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; margin-top: 20px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>StaffSync</h1>
+          </div>
+          <div class="content">
+            <div class="success-icon">✓</div>
+            <h2>Success!</h2>
+            <p>${message}</p>
+            <p>You can now close this window.</p>
+            <a href="#" class="btn" onclick="window.close()">Close Window</a>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  private static createErrorPage(message: string): string {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>StaffSync - Error</title>
+        <style>
+          body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }
+          .container { max-width: 600px; margin: 50px auto; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { padding: 30px; text-align: center; }
+          .error-icon { font-size: 48px; color: #dc3545; margin-bottom: 20px; }
+          .btn { background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; margin-top: 20px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>StaffSync</h1>
+          </div>
+          <div class="content">
+            <div class="error-icon">✗</div>
+            <h2>Error</h2>
+            <p>${message}</p>
+            <p>Please contact support if this issue persists.</p>
+            <a href="#" class="btn" onclick="window.close()">Close Window</a>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
   // Broadcast
   broadcast = async (req: AuthRequest, res: Response) => {
     const { broadcastType, radiusKm, filters, expiresAt } = req.body;
@@ -795,7 +1066,7 @@ export class ShiftController {
         status: 'ACTIVE',
         ...(canBroadcastToAll ? {} : { managerId: req.user!.id }),
       },
-      select: { id: true, fullName: true },
+      select: { id: true, fullName: true, email: true },
     });
 
     // Get shift details for notification
@@ -805,6 +1076,8 @@ export class ShiftController {
         id: true,
         title: true,
         startAt: true,
+        siteLocation: true,
+        payRate: true,
         clientCompany: { select: { name: true } },
       },
     });
@@ -848,6 +1121,37 @@ export class ShiftController {
       month: 'short',
     });
 
+    const shiftTime = new Date(shift.startAt).toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    const expiresAtStr = broadcast.expiresAt 
+      ? broadcast.expiresAt.toLocaleDateString('en-GB', {
+          weekday: 'short',
+          day: 'numeric',
+          month: 'short',
+        }) + ' ' + broadcast.expiresAt.toLocaleTimeString('en-GB', {
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      : undefined;
+
+    // Send email notifications for broadcast
+    const emailPromises = targetWorkers.map(worker => 
+      EmailService.sendShiftBroadcastEmail(worker.email, worker.fullName, {
+        shiftId: shift.id,
+        broadcastId: broadcast.id,
+        title: shift.title,
+        date: shiftDate,
+        time: shiftTime,
+        location: shift.siteLocation || 'TBD',
+        clientCompany: shift.clientCompany?.name,
+        payRate: shift.payRate ? Number(shift.payRate) : undefined,
+        expiresAt: expiresAtStr,
+      }).catch((error: any) => console.error(`Failed to send broadcast email to ${worker.email}:`, error))
+    );
+
     await NotificationService.sendToMultiple(
       targetWorkers.map(w => w.id),
       {
@@ -855,7 +1159,7 @@ export class ShiftController {
         body: `A new shift "${shift.title}" is available on ${shiftDate}${shift.clientCompany ? ` - ${shift.clientCompany.name}` : ''}`,
         type: 'SHIFT_AVAILABLE',
         preferenceType: 'NEW_SHIFT_ALERTS',
-        channels: ['push'],
+        channels: ['push', 'email'],
         categoryId: 'shift_action',
         data: {
           shiftId: shift.id,
@@ -864,6 +1168,9 @@ export class ShiftController {
         },
       }
     );
+
+    // Wait for all emails to be sent
+    await Promise.allSettled(emailPromises);
 
     ApiResponse.created(res, 'Shift broadcast sent', { broadcast, notifiedWorkers: targetWorkers.length });
   };

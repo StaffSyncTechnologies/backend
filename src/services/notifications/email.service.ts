@@ -162,6 +162,134 @@ export class EmailService {
     return this.sendNotification(email, subjects[shiftDetails.type], bodies[shiftDetails.type], fullName);
   }
 
+  static async sendShiftAssignmentEmail(email: string, fullName: string, shiftDetails: {
+    shiftId: string;
+    title: string;
+    date: string;
+    time: string;
+    location: string;
+    clientCompany?: string;
+    payRate?: number;
+  }): Promise<string> {
+    const acceptUrl = `${config.appUrl}/api/shifts/${shiftDetails.shiftId}/accept-email?email=${encodeURIComponent(email)}`;
+    const rejectUrl = `${config.appUrl}/api/shifts/${shiftDetails.shiftId}/reject-email?email=${encodeURIComponent(email)}`;
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0;">StaffSync</h1>
+        </div>
+        <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+          <h2 style="color: #333; margin-top: 0;">Hello ${fullName},</h2>
+          <h3 style="color: #667eea; margin-top: 0;">New Shift Assigned</h3>
+          <p>You have been assigned a new shift. Please review the details below and accept or reject:</p>
+          
+          <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea;">
+            <h4 style="margin-top: 0; color: #333;">${shiftDetails.title}</h4>
+            <p style="margin: 8px 0;"><strong>Date:</strong> ${shiftDetails.date}</p>
+            <p style="margin: 8px 0;"><strong>Time:</strong> ${shiftDetails.time}</p>
+            <p style="margin: 8px 0;"><strong>Location:</strong> ${shiftDetails.location}</p>
+            ${shiftDetails.clientCompany ? `<p style="margin: 8px 0;"><strong>Client:</strong> ${shiftDetails.clientCompany}</p>` : ''}
+            ${shiftDetails.payRate ? `<p style="margin: 8px 0;"><strong>Pay Rate:</strong> £${shiftDetails.payRate}/hr</p>` : ''}
+          </div>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${acceptUrl}" style="background: #28a745; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; margin-right: 10px;">Accept Shift</a>
+            <a href="${rejectUrl}" style="background: #dc3545; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Reject Shift</a>
+          </div>
+          
+          <p style="color: #666; font-size: 14px;">Or copy and paste these links into your browser:</p>
+          <p style="color: #667eea; font-size: 14px; word-break: break-all;">Accept: ${acceptUrl}</p>
+          <p style="color: #667eea; font-size: 14px; word-break: break-all;">Reject: ${rejectUrl}</p>
+          
+          <p style="color: #666; font-size: 14px;">Please respond as soon as possible to confirm your availability.</p>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+          <p style="color: #999; font-size: 12px; text-align: center;">
+            © ${new Date().getFullYear()} StaffSync. All rights reserved.
+          </p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    return this.send({
+      to: email,
+      subject: `New Shift Assigned - ${shiftDetails.title}`,
+      html,
+      text: `Hello ${fullName}, you have been assigned a new shift: ${shiftDetails.title} on ${shiftDetails.date} at ${shiftDetails.time} at ${shiftDetails.location}. Accept: ${acceptUrl} Reject: ${rejectUrl}`,
+    });
+  }
+
+  static async sendShiftBroadcastEmail(email: string, fullName: string, shiftDetails: {
+    shiftId: string;
+    broadcastId: string;
+    title: string;
+    date: string;
+    time: string;
+    location: string;
+    clientCompany?: string;
+    payRate?: number;
+    expiresAt?: string;
+  }): Promise<string> {
+    const acceptUrl = `${config.appUrl}/api/shifts/${shiftDetails.shiftId}/accept-email?email=${encodeURIComponent(email)}&broadcast=${shiftDetails.broadcastId}`;
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0;">StaffSync</h1>
+        </div>
+        <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+          <h2 style="color: #333; margin-top: 0;">Hello ${fullName},</h2>
+          <h3 style="color: #667eea; margin-top: 0;">New Shift Available</h3>
+          <p>A new shift is available and you're invited to apply. First come, first served!</p>
+          
+          <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea;">
+            <h4 style="margin-top: 0; color: #333;">${shiftDetails.title}</h4>
+            <p style="margin: 8px 0;"><strong>Date:</strong> ${shiftDetails.date}</p>
+            <p style="margin: 8px 0;"><strong>Time:</strong> ${shiftDetails.time}</p>
+            <p style="margin: 8px 0;"><strong>Location:</strong> ${shiftDetails.location}</p>
+            ${shiftDetails.clientCompany ? `<p style="margin: 8px 0;"><strong>Client:</strong> ${shiftDetails.clientCompany}</p>` : ''}
+            ${shiftDetails.payRate ? `<p style="margin: 8px 0;"><strong>Pay Rate:</strong> £${shiftDetails.payRate}/hr</p>` : ''}
+            ${shiftDetails.expiresAt ? `<p style="margin: 8px 0;"><strong>Expires:</strong> ${shiftDetails.expiresAt}</p>` : ''}
+          </div>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${acceptUrl}" style="background: #28a745; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Accept Shift</a>
+          </div>
+          
+          <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
+          <p style="color: #667eea; font-size: 14px; word-break: break-all;">${acceptUrl}</p>
+          
+          <p style="color: #666; font-size: 14px;">This shift is available on a first come, first served basis. Click the link above to claim it immediately!</p>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+          <p style="color: #999; font-size: 12px; text-align: center;">
+            © ${new Date().getFullYear()} StaffSync. All rights reserved.
+          </p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    return this.send({
+      to: email,
+      subject: `New Shift Available - ${shiftDetails.title}`,
+      html,
+      text: `Hello ${fullName}, a new shift is available: ${shiftDetails.title} on ${shiftDetails.date} at ${shiftDetails.time} at ${shiftDetails.location}. First come, first served! Accept: ${acceptUrl}`,
+    });
+  }
+
   static generateVerificationCode(): string {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
