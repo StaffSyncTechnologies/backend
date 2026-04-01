@@ -7,10 +7,6 @@ const router = Router();
 const controller = new ShiftController();
 const attendanceController = new AttendanceController();
 
-// Email actions (for email links - no auth required)
-router.post('/:shiftId/accept-email', controller.acceptShiftByEmail);
-router.post('/:shiftId/reject-email', controller.rejectShiftByEmail);
-
 router.use(authenticate);
 
 // CRUD

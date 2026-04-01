@@ -100,6 +100,13 @@ app.get('/debug/email-test', async (_req, res) => {
   }
 });
 
+// Public email routes (no authentication required)
+import { ShiftController } from './controllers/shift.controller';
+const shiftController = new ShiftController();
+
+app.post('/api/v1/shifts/:shiftId/accept-email', shiftController.acceptShiftByEmail);
+app.post('/api/v1/shifts/:shiftId/reject-email', shiftController.rejectShiftByEmail);
+
 // API Routes
 app.use('/api/v1', routes);
 
