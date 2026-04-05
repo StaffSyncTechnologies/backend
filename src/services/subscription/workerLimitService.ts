@@ -43,7 +43,6 @@ export async function checkWorkerLimit(organizationId: string): Promise<WorkerLi
     where: { 
       organizationId, 
       role: 'WORKER',
-      deletedAt: null,
     },
   });
 
@@ -90,7 +89,7 @@ export async function getUpgradeOptions(organizationId: string) {
   });
 
   const currentTier = subscription.planTier;
-  const currentBillingCycle = 'monthly'; // Default to monthly if not set
+  const currentBillingCycle = ('monthly' as 'monthly' | 'yearly'); // Default to monthly if not set
 
   // Calculate pricing for different options
   const options = [];
