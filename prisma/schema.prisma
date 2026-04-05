@@ -352,9 +352,11 @@ enum SubscriptionStatus {
 }
 
 enum PlanTier {
-  FREE        // 180-day free trial
-  STANDARD    // £500/month
-  ENTERPRISE  // Custom pricing - contact us
+  FREE          // 180-day free trial
+  STARTER       // £2.50/worker/month (1-10 workers)
+  PROFESSIONAL  // £3.50/worker/month (11-50 workers)
+  BUSINESS      // £4.50/worker/month (51-200 workers)
+  ENTERPRISE    // Custom pricing - contact us (200+ workers)
 }
 
 model Subscription {
@@ -369,6 +371,11 @@ model Subscription {
   // Plan details
   planTier              PlanTier            @default(FREE) @map("plan_tier")
   status                SubscriptionStatus  @default(TRIALING)
+  billingCycle          String              @default("monthly") @map("billing_cycle") @db.VarChar(20) // monthly or yearly
+  
+  // Per-worker pricing
+  workerCount           Int                 @default(0) @map("worker_count") // Current billable workers
+  pricePerWorker        Decimal?            @map("price_per_worker") @db.Decimal(10, 2) // Price per worker in pence
   
   // Limits based on plan (-1 = unlimited)
   workerLimit           Int                 @default(-1) @map("worker_limit")

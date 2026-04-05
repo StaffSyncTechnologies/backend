@@ -49,20 +49,71 @@ export const config = {
     publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || '',
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
     freeTrialDays: parseInt(process.env.FREE_TRIAL_DAYS || '180', 10),
-    plans: {
-      standard: {
-        monthlyPriceId: process.env.STRIPE_STANDARD_MONTHLY_PRICE_ID || '',
-        yearlyPriceId: process.env.STRIPE_STANDARD_YEARLY_PRICE_ID || '',
-        monthlyPrice: parseInt(process.env.STRIPE_STANDARD_MONTHLY_PRICE || '500', 10),   // £500/month (in pounds)
-        yearlyPrice: parseInt(process.env.STRIPE_STANDARD_YEARLY_PRICE || '5000', 10),     // £5000/year
-        workerLimit: parseInt(process.env.STRIPE_STANDARD_WORKER_LIMIT || '-1', 10),       // -1 = unlimited
-        clientLimit: parseInt(process.env.STRIPE_STANDARD_CLIENT_LIMIT || '-1', 10),
+    
+    // Per-worker pricing model (prices in pence)
+    perWorkerPricing: {
+      starter: {
+        name: 'Starter',
+        minWorkers: 1,
+        maxWorkers: 10,
+        monthlyPricePerWorker: parseInt(process.env.STRIPE_STARTER_MONTHLY_PER_WORKER || '250', 10),  // £2.50/worker/month
+        yearlyPricePerWorker: parseInt(process.env.STRIPE_STARTER_YEARLY_PER_WORKER || '200', 10),    // £2.00/worker/month (billed annually)
+        stripePriceId: process.env.STRIPE_STARTER_PRICE_ID || '',
+        features: [
+          'Basic scheduling & time tracking',
+          'Mobile app access',
+          'Email support',
+          'Up to 10 workers',
+        ],
+      },
+      professional: {
+        name: 'Professional',
+        minWorkers: 11,
+        maxWorkers: 50,
+        monthlyPricePerWorker: parseInt(process.env.STRIPE_PROFESSIONAL_MONTHLY_PER_WORKER || '350', 10),  // £3.50/worker/month
+        yearlyPricePerWorker: parseInt(process.env.STRIPE_PROFESSIONAL_YEARLY_PER_WORKER || '300', 10),    // £3.00/worker/month (billed annually)
+        stripePriceId: process.env.STRIPE_PROFESSIONAL_PRICE_ID || '',
+        features: [
+          'Everything in Starter',
+          'Advanced reporting & analytics',
+          'Invoicing & payroll',
+          'Priority support',
+          'API access',
+          '11-50 workers',
+        ],
+      },
+      business: {
+        name: 'Business',
+        minWorkers: 51,
+        maxWorkers: 200,
+        monthlyPricePerWorker: parseInt(process.env.STRIPE_BUSINESS_MONTHLY_PER_WORKER || '450', 10),  // £4.50/worker/month
+        yearlyPricePerWorker: parseInt(process.env.STRIPE_BUSINESS_YEARLY_PER_WORKER || '400', 10),    // £4.00/worker/month (billed annually)
+        stripePriceId: process.env.STRIPE_BUSINESS_PRICE_ID || '',
+        features: [
+          'Everything in Professional',
+          'Compliance management',
+          'Custom integrations',
+          'Dedicated account manager',
+          'Phone support',
+          '51-200 workers',
+        ],
       },
       enterprise: {
-        monthlyPriceId: process.env.STRIPE_ENTERPRISE_MONTHLY_PRICE_ID || '',
-        yearlyPriceId: process.env.STRIPE_ENTERPRISE_YEARLY_PRICE_ID || '',
-        workerLimit: parseInt(process.env.STRIPE_ENTERPRISE_WORKER_LIMIT || '-1', 10),
-        clientLimit: parseInt(process.env.STRIPE_ENTERPRISE_CLIENT_LIMIT || '-1', 10),
+        name: 'Enterprise',
+        minWorkers: 201,
+        maxWorkers: -1, // unlimited
+        monthlyPricePerWorker: null, // custom pricing
+        yearlyPricePerWorker: null,
+        stripePriceId: process.env.STRIPE_ENTERPRISE_PRICE_ID || '',
+        isCustomPricing: true,
+        features: [
+          'Everything in Business',
+          'White-label branding',
+          'Custom SLA',
+          'On-site training',
+          'Volume discounts',
+          '200+ workers - Contact sales',
+        ],
       },
     },
   },

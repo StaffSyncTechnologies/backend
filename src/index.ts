@@ -31,6 +31,7 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5174',
   'http://127.0.0.1:51180',
+  'https://app.staffsynctech.co.uk', // Production frontend
   process.env.CORS_ORIGIN,
   process.env.FRONTEND_URL
 ].filter(Boolean) as string[];

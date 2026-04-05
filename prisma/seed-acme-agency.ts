@@ -33,7 +33,7 @@ async function seedSecondAgency() {
           primaryColor: '#2563eb',
           secondaryColor: '#64748b',
           onboardingComplete: true,
-          plan: 'STANDARD',
+          plan: 'STARTER',
           trialEndsAt: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000), // 180 days
         },
       });
@@ -129,7 +129,7 @@ async function seedSecondAgency() {
       await prisma.subscription.create({
         data: {
           organizationId: acmeOrganization.id,
-          planTier: 'STANDARD',
+          planTier: 'STARTER',
           status: 'TRIALING',
           workerLimit: 500,
           clientLimit: 50,

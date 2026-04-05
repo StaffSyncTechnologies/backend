@@ -13,16 +13,19 @@ import { stripeService, PLANS, FREE_TRIAL_DAYS } from '../services/stripe';
 import { PlanTier } from '@prisma/client';
 import { SubscriptionNotificationService } from '../services/notifications/subscription.notification';
 import { SubscriptionChecker } from '../services/subscriptionChecker';
+import * as WorkerLimitService from '../services/subscription/workerLimitService';
 export class SubscriptionController {
   /**
-   * Get available plans
+   * Get available plans with per-worker pricing
    */
   getPlans = async (req: Request, res: Response) => {
     const plans = Object.entries(PLANS).map(([key, plan]) => ({
       id: key,
       name: plan.name,
-      monthlyPrice: plan.monthlyPrice,
-      yearlyPrice: plan.yearlyPrice,
+      monthlyPricePerWorker: plan.monthlyPricePerWorker,
+      yearlyPricePerWorker: plan.yearlyPricePerWorker,
+      minWorkers: (plan as any).minWorkers || 1,
+      maxWorkers: plan.workerLimit === -1 ? 'Unlimited' : plan.workerLimit,
       workerLimit: plan.workerLimit === -1 ? 'Unlimited' : plan.workerLimit,
       clientLimit: plan.clientLimit === -1 ? 'Unlimited' : plan.clientLimit,
       features: plan.features,
@@ -34,6 +37,7 @@ export class SubscriptionController {
       plans,
       freeTrialDays: FREE_TRIAL_DAYS,
       currency: 'GBP',
+      pricingModel: 'per-worker',
     });
   };
 
@@ -193,7 +197,9 @@ export class SubscriptionController {
     // Get plan display name
     const planNames: Record<string, string> = {
       FREE: 'Free Trial',
-      STANDARD: 'Standard',
+      STARTER: 'Starter',
+      PROFESSIONAL: 'Professional',
+      BUSINESS: 'Business',
       ENTERPRISE: 'Enterprise',
     };
 
@@ -248,11 +254,16 @@ export class SubscriptionController {
 
   createCheckoutSession = async (req: AuthRequest, res: Response) => {
     const organizationId = req.user!.organizationId;
-    const { planTier, billingCycle = 'monthly' } = req.body;
+    const { planTier, billingCycle = 'monthly', workerCount = 1 } = req.body;
 
-    // Only STANDARD plan can be purchased via checkout
-    if (!planTier || !['STANDARD'].includes(planTier)) {
-      throw new AppError('Invalid plan tier. Use STANDARD for checkout or contact us for ENTERPRISE.', 400);
+    // Only STARTER, PROFESSIONAL, BUSINESS can be purchased via checkout
+    if (!planTier || !['STARTER', 'PROFESSIONAL', 'BUSINESS'].includes(planTier)) {
+      throw new AppError('Invalid plan tier. Use STARTER, PROFESSIONAL, or BUSINESS for checkout or contact us for ENTERPRISE.', 400);
+    }
+
+    // Validate worker count
+    if (workerCount < 1) {
+      throw new AppError('Worker count must be at least 1', 400);
     }
 
     if (!['monthly', 'yearly'].includes(billingCycle)) {
@@ -277,7 +288,8 @@ export class SubscriptionController {
       planTier as PlanTier,
       billingCycle,
       successUrl,
-      cancelUrl
+      cancelUrl,
+      workerCount
     );
 
     ApiResponse.ok(res, 'Checkout session created', {
@@ -291,11 +303,16 @@ export class SubscriptionController {
    */
   createSubscription = async (req: AuthRequest, res: Response) => {
     const organizationId = req.user!.organizationId;
-    const { planTier, billingCycle = 'monthly', paymentMethodId } = req.body;
+    const { planTier, billingCycle = 'monthly', paymentMethodId, workerCount = 1 } = req.body;
 
-    // Only STANDARD plan can be created via API
-    if (!planTier || !['STANDARD'].includes(planTier)) {
-      throw new AppError('Invalid plan tier. Use STANDARD or contact us for ENTERPRISE.', 400);
+    // Only STARTER, PROFESSIONAL, BUSINESS can be created via API
+    if (!planTier || !['STARTER', 'PROFESSIONAL', 'BUSINESS'].includes(planTier)) {
+      throw new AppError('Invalid plan tier. Use STARTER, PROFESSIONAL, or BUSINESS or contact us for ENTERPRISE.', 400);
+    }
+
+    // Validate worker count
+    if (workerCount < 1) {
+      throw new AppError('Worker count must be at least 1', 400);
     }
 
     // Check for existing active subscription
@@ -311,6 +328,7 @@ export class SubscriptionController {
       organizationId,
       planTier: planTier as PlanTier,
       billingCycle,
+      workerCount,
       paymentMethodId,
       trialDays: 0, // No additional trial for paid plans - trial is on FREE tier
     });
@@ -337,8 +355,8 @@ export class SubscriptionController {
       throw new AppError('No active subscription found', 404);
     }
 
-    // Validate plan tier if provided (only STANDARD can be selected via self-service)
-    if (planTier && !['STANDARD'].includes(planTier)) {
+    // Validate plan tier if provided (only STARTER, PROFESSIONAL, BUSINESS can be selected via self-service)
+    if (planTier && !['STARTER', 'PROFESSIONAL', 'BUSINESS'].includes(planTier)) {
       throw new AppError('Invalid plan tier. Contact us for ENTERPRISE plans.', 400);
     }
 
@@ -379,7 +397,7 @@ export class SubscriptionController {
    */
   cancelSubscription = async (req: AuthRequest, res: Response) => {
     const organizationId = req.user!.organizationId;
-    const { immediately = false } = req.body;
+    const { immediately = false, reason } = req.body;
 
     const subscription = await prisma.subscription.findUnique({
       where: { organizationId },
@@ -394,6 +412,11 @@ export class SubscriptionController {
       immediately
     );
 
+    // Log cancellation reason if provided
+    if (reason) {
+      console.log(`Subscription canceled for ${organizationId}. Reason: ${reason}`);
+    }
+
     // Send cancellation notification
     SubscriptionNotificationService.notifySubscriptionCanceled(organizationId)
       .catch(err => console.error('Failed to send cancellation notification:', err));
@@ -402,6 +425,140 @@ export class SubscriptionController {
       status: canceled.status,
       cancelAtPeriodEnd: canceled.cancel_at_period_end,
       cancelAt: canceled.cancel_at ? new Date(canceled.cancel_at * 1000) : null,
+    });
+  };
+
+  /**
+   * Check worker limit status
+   */
+  checkWorkerLimit = async (req: AuthRequest, res: Response) => {
+    const organizationId = req.user!.organizationId;
+
+    const limitCheck = await WorkerLimitService.checkWorkerLimit(organizationId);
+
+    ApiResponse.ok(res, 'Worker limit status', limitCheck);
+  };
+
+  /**
+   * Get upgrade options when limit is exceeded
+   */
+  getUpgradeOptions = async (req: AuthRequest, res: Response) => {
+    const organizationId = req.user!.organizationId;
+
+    const options = await WorkerLimitService.getUpgradeOptions(organizationId);
+
+    ApiResponse.ok(res, 'Upgrade options', options);
+  };
+
+  /**
+   * Update worker count (for existing subscription)
+   */
+  updateWorkerCount = async (req: AuthRequest, res: Response) => {
+    const organizationId = req.user!.organizationId;
+    const { workerCount } = req.body;
+
+    if (!workerCount || workerCount < 1) {
+      throw new AppError('Worker count must be at least 1', 400);
+    }
+
+    const subscription = await prisma.subscription.findUnique({
+      where: { organizationId },
+    });
+
+    if (!subscription?.stripeSubscriptionId) {
+      throw new AppError('No active subscription found', 404);
+    }
+
+    // Validate worker count against current workers
+    const currentWorkers = await prisma.user.count({
+      where: { 
+        organizationId, 
+        role: 'WORKER',
+        deletedAt: null,
+      },
+    });
+
+    if (workerCount < currentWorkers) {
+      throw new AppError(
+        `Cannot set worker count to ${workerCount}. You currently have ${currentWorkers} active workers.`,
+        400
+      );
+    }
+
+    // Determine if tier change is needed
+    const suggestedTier = WorkerLimitService.determinePlanTierForWorkerCount(workerCount);
+    const currentTier = subscription.planTier;
+
+    // Update Stripe subscription quantity
+    const updated = await stripeService.updateSubscription({
+      subscriptionId: subscription.stripeSubscriptionId,
+      planTier: suggestedTier !== currentTier ? suggestedTier : undefined,
+      workerCount,
+    });
+
+    ApiResponse.ok(res, 'Worker count updated', {
+      workerCount,
+      planTier: suggestedTier,
+      tierChanged: suggestedTier !== currentTier,
+      status: updated.status,
+    });
+  };
+
+  /**
+   * Upgrade plan (tier and/or billing cycle)
+   */
+  upgradePlan = async (req: AuthRequest, res: Response) => {
+    const organizationId = req.user!.organizationId;
+    const { planTier, billingCycle, workerCount } = req.body;
+
+    const subscription = await prisma.subscription.findUnique({
+      where: { organizationId },
+    });
+
+    if (!subscription?.stripeSubscriptionId) {
+      throw new AppError('No active subscription found', 404);
+    }
+
+    // Validate plan tier
+    if (planTier && !['STARTER', 'PROFESSIONAL', 'BUSINESS'].includes(planTier)) {
+      throw new AppError('Invalid plan tier. Contact us for ENTERPRISE plans.', 400);
+    }
+
+    // Validate worker count if provided
+    if (workerCount) {
+      const currentWorkers = await prisma.user.count({
+        where: { 
+          organizationId, 
+          role: 'WORKER',
+          deletedAt: null,
+        },
+      });
+
+      if (workerCount < currentWorkers) {
+        throw new AppError(
+          `Cannot set worker count to ${workerCount}. You currently have ${currentWorkers} active workers.`,
+          400
+        );
+      }
+    }
+
+    const updated = await stripeService.updateSubscription({
+      subscriptionId: subscription.stripeSubscriptionId,
+      planTier: planTier as PlanTier,
+      billingCycle,
+      workerCount,
+    });
+
+    // Send upgrade notification
+    SubscriptionNotificationService.notifySubscriptionUpgraded(organizationId, planTier)
+      .catch(err => console.error('Failed to send upgrade notification:', err));
+
+    ApiResponse.ok(res, 'Plan upgraded successfully', {
+      planTier,
+      billingCycle,
+      workerCount,
+      status: updated.status,
+      currentPeriodEnd: new Date((updated as any).current_period_end * 1000),
     });
   };
 

@@ -30,21 +30,56 @@ const isStripeConfigured = (): boolean => {
 // Trial duration from config
 export const FREE_TRIAL_DAYS = config.stripe.freeTrialDays;
 
-// Plan configuration - all values driven from config
+/**
+ * Helper: Calculate total price based on worker count
+ */
+export function calculateTotalPrice(
+  planTier: PlanTier,
+  workerCount: number,
+  billingCycle: 'monthly' | 'yearly'
+): number {
+  const plan = PLANS[planTier as keyof typeof PLANS];
+  
+  if (!plan || (plan as any).isCustomPricing) {
+    return 0; // Enterprise - contact sales
+  }
+  
+  const pricePerWorker = billingCycle === 'yearly' 
+    ? plan.yearlyPricePerWorker 
+    : plan.monthlyPricePerWorker;
+  
+  // Handle null prices (Enterprise tier)
+  if (pricePerWorker === null || pricePerWorker === undefined) {
+    return 0;
+  }
+  
+  return workerCount * pricePerWorker;
+}
+
+/**
+ * Helper: Determine appropriate plan tier based on worker count
+ */
+export function determinePlanTier(workerCount: number): PlanTier {
+  if (workerCount <= 10) return 'STARTER' as PlanTier;
+  if (workerCount <= 50) return 'PROFESSIONAL' as PlanTier;
+  if (workerCount <= 200) return 'BUSINESS' as PlanTier;
+  return 'ENTERPRISE' as PlanTier;
+}
+
+// Plan configuration - per-worker pricing model
 export const PLANS = {
   FREE: {
     name: 'Free Trial',
-    monthlyPriceId: null,
-    yearlyPriceId: null,
-    monthlyPrice: 0,
-    yearlyPrice: 0,
     trialDays: FREE_TRIAL_DAYS,
-    workerLimit: -1,
+    monthlyPricePerWorker: 0,
+    yearlyPricePerWorker: 0,
+    minWorkers: 1,
+    maxWorkers: 10,
+    workerLimit: 10,
     clientLimit: -1,
     features: [
       `${FREE_TRIAL_DAYS}-day free trial`,
-      'Unlimited workers',
-      'Unlimited clients',
+      'Up to 10 workers',
       'Full scheduling features',
       'Time tracking & timesheets',
       'Invoicing & payroll',
@@ -52,45 +87,50 @@ export const PLANS = {
       'Email support',
     ],
   },
-  STANDARD: {
-    name: 'Standard',
-    monthlyPriceId: config.stripe.plans.standard.monthlyPriceId,
-    yearlyPriceId: config.stripe.plans.standard.yearlyPriceId,
-    monthlyPrice: config.stripe.plans.standard.monthlyPrice,
-    yearlyPrice: config.stripe.plans.standard.yearlyPrice,
-    workerLimit: config.stripe.plans.standard.workerLimit,
-    clientLimit: config.stripe.plans.standard.clientLimit,
-    features: [
-      'Unlimited workers',
-      'Unlimited clients',
-      'Full scheduling features',
-      'Time tracking & timesheets',
-      'Invoicing & payroll',
-      'Reports & analytics',
-      'Compliance management',
-      'Priority email & phone support',
-      'API access',
-    ],
+  STARTER: {
+    name: config.stripe.perWorkerPricing.starter.name,
+    monthlyPricePerWorker: config.stripe.perWorkerPricing.starter.monthlyPricePerWorker,
+    yearlyPricePerWorker: config.stripe.perWorkerPricing.starter.yearlyPricePerWorker,
+    minWorkers: config.stripe.perWorkerPricing.starter.minWorkers,
+    maxWorkers: config.stripe.perWorkerPricing.starter.maxWorkers,
+    workerLimit: config.stripe.perWorkerPricing.starter.maxWorkers,
+    clientLimit: -1,
+    stripePriceId: config.stripe.perWorkerPricing.starter.stripePriceId,
+    features: config.stripe.perWorkerPricing.starter.features,
+  },
+  PROFESSIONAL: {
+    name: config.stripe.perWorkerPricing.professional.name,
+    monthlyPricePerWorker: config.stripe.perWorkerPricing.professional.monthlyPricePerWorker,
+    yearlyPricePerWorker: config.stripe.perWorkerPricing.professional.yearlyPricePerWorker,
+    minWorkers: config.stripe.perWorkerPricing.professional.minWorkers,
+    maxWorkers: config.stripe.perWorkerPricing.professional.maxWorkers,
+    workerLimit: config.stripe.perWorkerPricing.professional.maxWorkers,
+    clientLimit: -1,
+    stripePriceId: config.stripe.perWorkerPricing.professional.stripePriceId,
+    features: config.stripe.perWorkerPricing.professional.features,
+  },
+  BUSINESS: {
+    name: config.stripe.perWorkerPricing.business.name,
+    monthlyPricePerWorker: config.stripe.perWorkerPricing.business.monthlyPricePerWorker,
+    yearlyPricePerWorker: config.stripe.perWorkerPricing.business.yearlyPricePerWorker,
+    minWorkers: config.stripe.perWorkerPricing.business.minWorkers,
+    maxWorkers: config.stripe.perWorkerPricing.business.maxWorkers,
+    workerLimit: config.stripe.perWorkerPricing.business.maxWorkers,
+    clientLimit: -1,
+    stripePriceId: config.stripe.perWorkerPricing.business.stripePriceId,
+    features: config.stripe.perWorkerPricing.business.features,
   },
   ENTERPRISE: {
-    name: 'Enterprise',
-    monthlyPriceId: config.stripe.plans.enterprise.monthlyPriceId,
-    yearlyPriceId: config.stripe.plans.enterprise.yearlyPriceId,
-    monthlyPrice: null,
-    yearlyPrice: null,
-    workerLimit: config.stripe.plans.enterprise.workerLimit,
-    clientLimit: config.stripe.plans.enterprise.clientLimit,
+    name: config.stripe.perWorkerPricing.enterprise.name,
+    monthlyPricePerWorker: null,
+    yearlyPricePerWorker: null,
+    minWorkers: config.stripe.perWorkerPricing.enterprise.minWorkers,
+    maxWorkers: config.stripe.perWorkerPricing.enterprise.maxWorkers,
+    workerLimit: -1,
+    clientLimit: -1,
+    stripePriceId: config.stripe.perWorkerPricing.enterprise.stripePriceId,
     isCustomPricing: true,
-    features: [
-      'Everything in Standard',
-      'White-label branding',
-      'Custom integrations',
-      'Dedicated account manager',
-      '24/7 phone support',
-      'On-site training',
-      'Custom SLA',
-      'Volume discounts',
-    ],
+    features: config.stripe.perWorkerPricing.enterprise.features,
   },
 };
 
@@ -105,6 +145,7 @@ export interface CreateSubscriptionInput {
   organizationId: string;
   planTier: PlanTier;
   billingCycle: 'monthly' | 'yearly';
+  workerCount: number; // Number of workers to bill for
   paymentMethodId?: string;
   trialDays?: number;
 }
@@ -113,6 +154,7 @@ export interface UpdateSubscriptionInput {
   subscriptionId: string;
   planTier?: PlanTier;
   billingCycle?: 'monthly' | 'yearly';
+  workerCount?: number;
   cancelAtPeriodEnd?: boolean;
 }
 
@@ -178,7 +220,7 @@ class StripeService {
   }
 
   /**
-   * Create a subscription with optional trial
+   * Create a subscription with per-worker pricing
    */
   async createSubscription(input: CreateSubscriptionInput): Promise<{
     subscription: Stripe.Subscription;
@@ -186,8 +228,19 @@ class StripeService {
   } | null> {
     if (!isStripeConfigured() || !stripe) return null;
 
-    const plan = PLANS[input.planTier];
-    const priceId = input.billingCycle === 'yearly' ? plan.yearlyPriceId : plan.monthlyPriceId;
+    const plan = PLANS[input.planTier as keyof typeof PLANS];
+    
+    // For Enterprise, require custom pricing setup
+    if ((plan as any).isCustomPricing) {
+      throw new Error('Enterprise plan requires custom pricing. Please contact sales.');
+    }
+
+    // Get the Stripe price ID for this plan
+    const priceId = (plan as any).stripePriceId;
+    
+    if (!priceId) {
+      throw new Error(`No Stripe price ID configured for ${input.planTier} plan`);
+    }
 
     // Get or create customer
     const customerId = await this.getOrCreateCustomer(input.organizationId);
@@ -205,10 +258,13 @@ class StripeService {
       });
     }
 
-    // Create subscription
+    // Create subscription with quantity (worker count)
     const subscriptionParams: Stripe.SubscriptionCreateParams = {
       customer: customerId!,
-      items: [{ price: priceId as string }],
+      items: [{ 
+        price: priceId,
+        quantity: input.workerCount, // Per-worker billing
+      }],
       payment_behavior: 'default_incomplete',
       payment_settings: {
         save_default_payment_method: 'on_subscription',
@@ -217,6 +273,8 @@ class StripeService {
       metadata: {
         organizationId: input.organizationId,
         planTier: input.planTier,
+        workerCount: input.workerCount.toString(),
+        billingCycle: input.billingCycle,
       },
     };
 
@@ -236,7 +294,7 @@ class StripeService {
     }
 
     // Save subscription to database
-    await this.syncSubscriptionToDatabase(subscription, input.organizationId);
+    await this.syncSubscriptionToDatabase(subscription, input.organizationId, input.workerCount, input.billingCycle);
 
     return { subscription, clientSecret };
   }
@@ -257,20 +315,53 @@ class StripeService {
 
     const updateParams: Stripe.SubscriptionUpdateParams = {};
 
-    // Update plan/price
-    if (input.planTier || input.billingCycle) {
-      const plan = PLANS[input.planTier || dbSubscription.planTier];
-      const cycle = input.billingCycle || 'monthly';
-      const priceId = cycle === 'yearly' ? plan.yearlyPriceId : plan.monthlyPriceId;
+    // Get current subscription to find the item ID
+    const currentSub = await stripe.subscriptions.retrieve(input.subscriptionId);
+    const itemId = currentSub.items.data[0]?.id;
 
-      // Get current subscription to find the item ID
-      const currentSub = await stripe.subscriptions.retrieve(input.subscriptionId);
-      const itemId = currentSub.items.data[0]?.id;
+    // Update plan/price and/or worker count
+    if (input.planTier || input.billingCycle || input.workerCount) {
+      const planTier = input.planTier || dbSubscription.planTier;
+      const plan = PLANS[planTier];
+      const cycle = input.billingCycle || dbSubscription.billingCycle || 'monthly';
+      
+      // Determine price ID based on billing cycle
+      const pricePerWorker = cycle === 'yearly' 
+        ? plan.yearlyPricePerWorker 
+        : plan.monthlyPricePerWorker;
+      
+      const stripePriceId = plan.stripePriceId;
 
-      if (itemId) {
-        updateParams.items = [{ id: itemId, price: priceId as string }];
+      if (itemId && stripePriceId) {
+        const quantity = input.workerCount || dbSubscription.workerCount || 1;
+        
+        updateParams.items = [{ 
+          id: itemId, 
+          price: stripePriceId as string,
+          quantity: quantity,
+        }];
         updateParams.proration_behavior = 'create_prorations';
+        
+        // Update metadata
+        updateParams.metadata = {
+          organizationId: dbSubscription.organizationId,
+          planTier: planTier,
+          workerCount: quantity.toString(),
+          billingCycle: cycle,
+        };
       }
+    } else if (input.workerCount && itemId) {
+      // Just update quantity without changing price
+      updateParams.items = [{ 
+        id: itemId, 
+        quantity: input.workerCount,
+      }];
+      updateParams.proration_behavior = 'create_prorations';
+      
+      updateParams.metadata = {
+        ...currentSub.metadata,
+        workerCount: input.workerCount.toString(),
+      };
     }
 
     // Cancel at period end
@@ -338,37 +429,55 @@ class StripeService {
   }
 
   /**
-   * Create a checkout session for subscription
+   * Create a checkout session for subscription with per-worker pricing
    */
   async createCheckoutSession(
     organizationId: string,
     planTier: PlanTier,
     billingCycle: 'monthly' | 'yearly',
     successUrl: string,
-    cancelUrl: string
+    cancelUrl: string,
+    workerCount: number = 1
   ): Promise<Stripe.Checkout.Session> {
     if (!isStripeConfigured() || !stripe) throw new Error('Stripe not configured');
 
-    const plan = PLANS[planTier];
-    const priceId = billingCycle === 'yearly' ? plan.yearlyPriceId : plan.monthlyPriceId;
+    const plan = PLANS[planTier as keyof typeof PLANS];
+    
+    // For Enterprise, require custom pricing
+    if ((plan as any).isCustomPricing) {
+      throw new Error('Enterprise plan requires custom pricing. Please contact sales.');
+    }
+    
+    const priceId = (plan as any).stripePriceId;
+    
+    if (!priceId) {
+      throw new Error(`No Stripe price ID configured for ${planTier} plan`);
+    }
+    
     const customerId = await this.getOrCreateCustomer(organizationId);
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId!,
       mode: 'subscription',
-      line_items: [{ price: priceId as string, quantity: 1 }],
+      line_items: [{ 
+        price: priceId,
+        quantity: workerCount, // Per-worker billing
+      }],
       success_url: successUrl,
       cancel_url: cancelUrl,
       subscription_data: {
-        trial_period_days: FREE_TRIAL_DAYS,
         metadata: {
           organizationId,
           planTier,
+          workerCount: workerCount.toString(),
+          billingCycle,
         },
       },
       metadata: {
         organizationId,
         planTier,
+        workerCount: workerCount.toString(),
+        billingCycle,
       },
     });
 
@@ -460,12 +569,30 @@ class StripeService {
    */
   async syncSubscriptionToDatabase(
     stripeSubscription: Stripe.Subscription,
-    organizationId: string
+    organizationId: string,
+    workerCount?: number,
+    billingCycle?: 'monthly' | 'yearly'
   ): Promise<void> {
     const planTier = (stripeSubscription.metadata.planTier as PlanTier) || 'STARTER';
-    const plan = PLANS[planTier];
+    const plan = PLANS[planTier as keyof typeof PLANS];
 
     const status = this.mapStripeStatus(stripeSubscription.status);
+    
+    // Get worker count from metadata or parameter
+    const finalWorkerCount = workerCount || 
+      parseInt(stripeSubscription.metadata.workerCount || '0') || 
+      stripeSubscription.items.data[0]?.quantity || 
+      0;
+    
+    // Get billing cycle from metadata or parameter
+    const finalBillingCycle = billingCycle || 
+      (stripeSubscription.metadata.billingCycle as 'monthly' | 'yearly') || 
+      'monthly';
+    
+    // Calculate price per worker
+    const pricePerWorker = finalBillingCycle === 'yearly' 
+      ? plan.yearlyPricePerWorker 
+      : plan.monthlyPricePerWorker;
 
     await prisma.subscription.upsert({
       where: { organizationId },
@@ -476,6 +603,9 @@ class StripeService {
         stripePriceId: stripeSubscription.items.data[0]?.price.id,
         planTier,
         status,
+        billingCycle: finalBillingCycle,
+        workerCount: finalWorkerCount,
+        pricePerWorker: pricePerWorker || 0,
         workerLimit: plan.workerLimit,
         clientLimit: plan.clientLimit,
         currentPeriodStart: new Date((stripeSubscription as any).current_period_start * 1000),
@@ -496,6 +626,9 @@ class StripeService {
         stripePriceId: stripeSubscription.items.data[0]?.price.id,
         planTier,
         status,
+        billingCycle: finalBillingCycle,
+        workerCount: finalWorkerCount,
+        pricePerWorker: pricePerWorker || 0,
         workerLimit: plan.workerLimit,
         clientLimit: plan.clientLimit,
         currentPeriodStart: new Date((stripeSubscription as any).current_period_start * 1000),

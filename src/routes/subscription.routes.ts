@@ -42,6 +42,12 @@ router.get('/invoices', asyncHandler(controller.getInvoices));
 // Get subscription history (for frontend table)
 router.get('/history', asyncHandler(controller.getHistory));
 
+// Check worker limit status
+router.get('/worker-limit', asyncHandler(controller.checkWorkerLimit));
+
+// Get upgrade options
+router.get('/upgrade-options', asyncHandler(controller.getUpgradeOptions));
+
 // Admin-only routes
 router.use(authorizeAdmin);
 
@@ -53,6 +59,12 @@ router.post('/', asyncHandler(controller.createSubscription));
 
 // Update subscription (upgrade/downgrade)
 router.put('/', asyncHandler(controller.updateSubscription));
+
+// Update worker count
+router.put('/worker-count', asyncHandler(controller.updateWorkerCount));
+
+// Upgrade plan (tier/billing cycle/worker count)
+router.post('/upgrade', asyncHandler(controller.upgradePlan));
 
 // Cancel subscription
 router.post('/cancel', asyncHandler(controller.cancelSubscription));
