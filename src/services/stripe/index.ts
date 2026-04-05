@@ -322,15 +322,15 @@ class StripeService {
     // Update plan/price and/or worker count
     if (input.planTier || input.billingCycle || input.workerCount) {
       const planTier = input.planTier || dbSubscription.planTier;
-      const plan = PLANS[planTier];
-      const cycle = input.billingCycle || dbSubscription.billingCycle || 'monthly';
+      const plan = PLANS[planTier as keyof typeof PLANS];
+      const cycle = input.billingCycle || 'monthly';
       
       // Determine price ID based on billing cycle
       const pricePerWorker = cycle === 'yearly' 
         ? plan.yearlyPricePerWorker 
         : plan.monthlyPricePerWorker;
       
-      const stripePriceId = plan.stripePriceId;
+      const stripePriceId = (plan as any).stripePriceId;
 
       if (itemId && stripePriceId) {
         const quantity = input.workerCount || dbSubscription.workerCount || 1;

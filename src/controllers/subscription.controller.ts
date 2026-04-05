@@ -474,7 +474,6 @@ export class SubscriptionController {
       where: { 
         organizationId, 
         role: 'WORKER',
-        deletedAt: null,
       },
     });
 
@@ -530,7 +529,6 @@ export class SubscriptionController {
         where: { 
           organizationId, 
           role: 'WORKER',
-          deletedAt: null,
         },
       });
 
@@ -550,8 +548,8 @@ export class SubscriptionController {
     });
 
     // Send upgrade notification
-    SubscriptionNotificationService.notifySubscriptionUpgraded(organizationId, planTier)
-      .catch(err => console.error('Failed to send upgrade notification:', err));
+    SubscriptionNotificationService.notifySubscriptionResumed(organizationId, planTier)
+      .catch((err: Error) => console.error('Failed to send upgrade notification:', err));
 
     ApiResponse.ok(res, 'Plan upgraded successfully', {
       planTier,

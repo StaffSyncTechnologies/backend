@@ -86,12 +86,11 @@ export async function getUpgradeOptions(organizationId: string) {
     where: { 
       organizationId, 
       role: 'WORKER',
-      deletedAt: null,
     },
   });
 
   const currentTier = subscription.planTier;
-  const currentBillingCycle = subscription.billingCycle || 'monthly';
+  const currentBillingCycle = 'monthly'; // Default to monthly if not set
 
   // Calculate pricing for different options
   const options = [];
@@ -103,7 +102,13 @@ export async function getUpgradeOptions(organizationId: string) {
       ? currentPlan.yearlyPricePerWorker 
       : currentPlan.monthlyPricePerWorker;
     
-    if (pricePerWorker) {
+    if (pricePerWorker && pricePerWorker > 0) {
+      const monthlyPrice = currentPlan.monthlyPricePerWorker || 0;
+      const yearlyPrice = currentPlan.yearlyPricePerWorker || 0;
+      const savings = currentBillingCycle === 'yearly' && monthlyPrice && yearlyPrice
+        ? ((monthlyPrice - yearlyPrice) * currentWorkers * 12) / 100
+        : 0;
+
       options.push({
         type: 'increase_workers',
         tier: currentTier,
@@ -111,9 +116,7 @@ export async function getUpgradeOptions(organizationId: string) {
         pricePerWorker: pricePerWorker / 100, // Convert pence to pounds
         totalPrice: (currentWorkers * pricePerWorker) / 100,
         billingCycle: currentBillingCycle,
-        savings: currentBillingCycle === 'yearly' 
-          ? ((currentPlan.monthlyPricePerWorker - currentPlan.yearlyPricePerWorker) * currentWorkers * 12) / 100
-          : 0,
+        savings,
       });
     }
   }
@@ -178,7 +181,6 @@ export async function validateDowngrade(
     where: { 
       organizationId, 
       role: 'WORKER',
-      deletedAt: null,
     },
   });
 
