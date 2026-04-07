@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { exit } from 'process';
 
 // Use the remote database URL
-const DATABASE_URL = "postgresql://staffsync_97y9_user:C4kD8ioJWWGXslW7TArnw6ro0gtEyQLz@dpg-d6maih7kijhs73frn22g-a.oregon-postgres.render.com/staffsync_97y9";
+const DATABASE_URL = "postgresql://neondb_owner:npg_Q29bTqnxMpUe@ep-dawn-breeze-abnc271v.eu-west-2.aws.neon.tech/neondb?sslmode=require";
 
 const prisma = new PrismaClient({
   datasources: {

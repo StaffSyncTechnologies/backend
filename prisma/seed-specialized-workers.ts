@@ -123,7 +123,8 @@ async function main() {
     }
   ];
 
-  const bcrypt = await import('bcryptjs');
+  const bcryptModule = await import('bcryptjs');
+  const bcrypt = bcryptModule.default || bcryptModule;
   const workerPassword = await bcrypt.hash('Worker123!', 10);
 
   const createdWorkers = [];

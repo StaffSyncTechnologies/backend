@@ -5,7 +5,8 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Seeding worker: oluwasuyibabayomi@gmail.com ...');
 
-  const bcrypt = await import('bcryptjs');
+  const bcryptModule = await import('bcryptjs');
+  const bcrypt = bcryptModule.default || bcryptModule;
 
   // Get existing org and admin
   const organization = await prisma.organization.findFirst();

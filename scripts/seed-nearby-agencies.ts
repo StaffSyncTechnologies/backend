@@ -1,18 +1,75 @@
 import { PrismaClient } from '@prisma/client';
 import { exit } from 'process';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
-const DATABASE_URL = "postgresql://staffsync_97y9_user:C4kD8ioJWWGXslW7TArnw6ro0gtEyQLz@dpg-d6maih7kijhs73frn22g-a.oregon-postgres.render.com/staffsync_97y9";
+const DATABASE_URL = "postgresql://neondb_owner:npg_Q29bTqnxMpUe@ep-dawn-breeze-abnc271v.eu-west-2.aws.neon.tech/neondb?sslmode=require";
 
 const prisma = new PrismaClient({
   datasources: { db: { url: DATABASE_URL } },
 });
 
 /**
- * Seed nearby agencies with locations around the iOS Simulator default
- * (Apple Park, Cupertino — 37.3349, -122.0090) plus a few in London.
+ * Seed nearby agencies with locations around the Android Emulator default
+ * (Mountain View — 37.422, -122.084) plus Bay Area & London.
  */
 const agencies = [
-  // --- San Francisco Bay Area (near iOS Simulator default) ---
+  // --- Mountain View / Googleplex area (closest to emulator at 37.422, -122.084) ---
+  {
+    name: 'Mountain View Care Services',
+    email: 'hire@mvcare.com',
+    phone: '+16505550010',
+    website: 'www.mvcare.com',
+    address: '1600 Amphitheatre Pkwy, Mountain View, CA 94043',
+    primaryColor: '#0EA5E9',
+    secondaryColor: '#0284C7',
+    location: {
+      name: 'Mountain View HQ',
+      address: '1600 Amphitheatre Pkwy, Mountain View, CA 94043',
+      latitude: 37.4220,
+      longitude: -122.0841,
+      contactPhone: '+16505550010',
+      contactName: 'Rachel Adams',
+      isPrimary: true,
+    },
+  },
+  {
+    name: 'NorCal Nursing Agency',
+    email: 'apply@norcalnursing.com',
+    phone: '+16505550020',
+    website: 'www.norcalnursing.com',
+    address: '800 W El Camino Real, Mountain View, CA 94040',
+    primaryColor: '#E11D48',
+    secondaryColor: '#BE123C',
+    location: {
+      name: 'El Camino Office',
+      address: '800 W El Camino Real, Mountain View, CA 94040',
+      latitude: 37.4030,
+      longitude: -122.0970,
+      contactPhone: '+16505550020',
+      contactName: 'Tom Garcia',
+      isPrimary: true,
+    },
+  },
+  {
+    name: 'Sunnyvale Staffing Co.',
+    email: 'jobs@sunnyvalestaffing.com',
+    phone: '+14085550030',
+    website: 'www.sunnyvalestaffing.com',
+    address: '123 Mathilda Ave, Sunnyvale, CA 94086',
+    primaryColor: '#F59E0B',
+    secondaryColor: '#D97706',
+    location: {
+      name: 'Sunnyvale Office',
+      address: '123 Mathilda Ave, Sunnyvale, CA 94086',
+      latitude: 37.3688,
+      longitude: -122.0363,
+      contactPhone: '+14085550030',
+      contactName: 'Priya Patel',
+      isPrimary: true,
+    },
+  },
+  // --- Wider Bay Area ---
   {
     name: 'Bay Area Staffing Solutions',
     email: 'hire@bayareastaffing.com',
@@ -154,16 +211,19 @@ const agencies = [
 
 async function seedNearbyAgencies() {
   try {
-    console.log('🌱 Seeding nearby agencies...\n');
+    console.log('🌱 Seeding nearby agencies with admin users + invite codes...\n');
+    const adminPassword = await bcrypt.hash('Admin123!', 10);
 
     for (const agency of agencies) {
       // Check if org already exists by name
       const existing = await prisma.organization.findFirst({
         where: { name: agency.name },
+        include: { inviteCodes: { take: 1 } },
       });
 
       if (existing) {
-        console.log(`⏭️  Skipped (already exists): ${agency.name}`);
+        const code = existing.inviteCodes?.[0]?.code || '(check DB)';
+        console.log(`⏭️  Skipped (already exists): ${agency.name}  |  invite: ${code}`);
         continue;
       }
 
@@ -172,14 +232,18 @@ async function seedNearbyAgencies() {
           name: agency.name,
           deploymentMode: 'AGENCY',
           email: agency.email,
+          phone: agency.phone ?? null,
           website: agency.website,
           address: agency.address,
           primaryColor: agency.primaryColor,
           secondaryColor: agency.secondaryColor,
           onboardingComplete: true,
+          plan: 'STARTER',
+          trialEndsAt: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000),
         },
       });
 
+      // Create location
       await prisma.location.create({
         data: {
           organizationId: org.id,
@@ -195,9 +259,40 @@ async function seedNearbyAgencies() {
         },
       });
 
+      // Create admin user
+      const adminEmail = `admin@${agency.email.split('@')[1]}`;
+      const adminUser = await prisma.user.create({
+        data: {
+          email: adminEmail,
+          passwordHash: adminPassword,
+          fullName: `${agency.name} Admin`,
+          role: 'ADMIN',
+          status: 'ACTIVE',
+          organizationId: org.id,
+          emailVerified: true,
+        },
+      });
+
+      // Create a MULTI_USE invite code for worker registration
+      const inviteCode = crypto.randomBytes(3).toString('hex').toUpperCase();
+      const codeHash = crypto.createHash('sha256').update(inviteCode).digest('hex');
+      await prisma.inviteCode.create({
+        data: {
+          organizationId: org.id,
+          code: inviteCode,
+          codeHash,
+          type: 'WORKER',
+          status: 'ACTIVE',
+          usageType: 'MULTI_USE',
+          maxUses: 100,
+          createdBy: adminUser.id,
+        },
+      });
+
       console.log(`✅ Created: ${agency.name}`);
       console.log(`   📍 ${agency.location.address} (${agency.location.latitude}, ${agency.location.longitude})`);
-      console.log(`   📞 ${agency.location.contactPhone}  ✉️  ${agency.email}\n`);
+      console.log(`   � ${adminEmail} / Admin123!`);
+      console.log(`   🔑 Invite code: ${inviteCode}\n`);
     }
 
     console.log('🎉 Nearby agencies seeding complete!');

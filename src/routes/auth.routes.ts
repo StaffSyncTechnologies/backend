@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { AuthController } from '../controllers/auth.controller';
 import { OnboardingController } from '../controllers/onboarding.controller';
+import { AccountDeletionController } from '../controllers/accountDeletion.controller';
 import { authenticate, authorizeAdmin, authorizeOps } from '../middleware/auth';
 import { uploadCertification, uploadProfilePic } from '../middleware/upload';
 
@@ -15,6 +16,9 @@ router.post('/forgot-password', authController.forgotPassword);
 router.post('/reset-password', authController.resetPassword);
 router.post('/send-otp', authController.sendOtp);
 router.post('/verify-otp', authController.verifyOtp);
+
+// Account deletion request (public)
+router.post('/request-account-deletion', AccountDeletionController.requestAccountDeletion);
 
 // Staff auth (dashboard users - non-workers)
 router.post('/staff/login', authController.staffLogin);

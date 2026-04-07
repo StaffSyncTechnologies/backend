@@ -76,6 +76,7 @@ async function seedTestData() {
           role: 'WORKER',
           fullName: 'John Smith',
           email: 'john.smith@test.com',
+          phone: '+447700900123',
           passwordHash: hashedPassword,
           status: 'ACTIVE',
           emailVerified: true,
