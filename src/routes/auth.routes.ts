@@ -20,6 +20,9 @@ router.post('/verify-otp', authController.verifyOtp);
 // Account deletion request (public)
 router.post('/request-account-deletion', AccountDeletionController.requestAccountDeletion);
 
+// Data deletion request (public)
+router.post('/request-data-deletion', AccountDeletionController.requestDataDeletion);
+
 // Staff auth (dashboard users - non-workers)
 router.post('/staff/login', authController.staffLogin);
 router.get('/staff-invite/:token', authController.validateStaffInvite);

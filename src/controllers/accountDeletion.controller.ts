@@ -12,6 +12,15 @@ const accountDeletionRequestSchema = z.object({
   reason: z.string().optional(),
 });
 
+// Schema for data deletion request
+const dataDeletionRequestSchema = z.object({
+  fullName: z.string().optional(),
+  email: z.string().email().optional(),
+  phone: z.string().optional(),
+  dataType: z.string().optional(),
+  reason: z.string().optional(),
+});
+
 export class AccountDeletionController {
   /**
    * Submit account deletion request
@@ -82,6 +91,59 @@ export class AccountDeletionController {
       return res.status(500).json({
         success: false,
         message: 'Failed to submit account deletion request'
+      });
+    }
+  }
+
+  /**
+   * Submit data deletion request
+   * POST /api/v1/auth/request-data-deletion
+   */
+  static async requestDataDeletion(req: Request, res: Response) {
+    try {
+      const data = dataDeletionRequestSchema.parse(req.body);
+
+      // For now, just log the request and send email notification
+      // In a production environment, you would:
+      // 1. Store the request in a database table
+      // 2. Send notification to admins
+      // 3. Send confirmation email to user
+      
+      console.log('Data deletion request received:', {
+        email: data.email,
+        fullName: data.fullName,
+        dataType: data.dataType,
+        reason: data.reason,
+        timestamp: new Date().toISOString()
+      });
+
+      // Send email notification (you would implement this)
+      // await EmailService.sendDataDeletionNotification(data.email, data.fullName, data.dataType);
+
+      return res.status(200).json({
+        success: true,
+        message: 'Data deletion request submitted successfully',
+        data: {
+          requestId: `DATA_REQ_${Date.now()}`,
+          processingTime: '7-10 business days',
+          contactEmail: 'info@staffsynctech.co.uk'
+        }
+      });
+
+    } catch (error: any) {
+      console.error('Data deletion request error:', error);
+      
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation failed',
+          errors: error.errors
+        });
+      }
+
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to submit data deletion request'
       });
     }
   }
