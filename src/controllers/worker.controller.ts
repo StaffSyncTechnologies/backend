@@ -1207,14 +1207,13 @@ export class WorkerController {
       0
     );
 
-    // Get today's shift (exclude shifts that have already ended)
+    // Get today's shift (include shifts that have already ended for completed view)
     const todayAssignment = await prisma.shiftAssignment.findFirst({
       where: {
         workerId,
         status: { in: ['ASSIGNED', 'ACCEPTED'] },
         shift: {
           startAt: { gte: startOfToday, lte: endOfToday },
-          endAt: { gt: now }, // Only include shifts that haven't ended yet
         },
       },
       include: {
@@ -1261,7 +1260,9 @@ export class WorkerController {
         status: attendance?.clockOutAt
           ? 'COMPLETED'
           : attendance?.clockInAt
-            ? 'IN_PROGRESS'
+            ? now > todayAssignment.shift.endAt
+              ? 'COMPLETED' // Shift ended but worker didn't clock out
+              : 'IN_PROGRESS'
             : 'PENDING',
         clockedIn: !!attendance?.clockInAt,
         clockedOut: !!attendance?.clockOutAt,
