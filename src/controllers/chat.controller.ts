@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { ChatService } from '../services/chat';
+import { FileUploadService } from '../services/fileUpload.service';
 import { ApiResponse } from '../utils/ApiResponse';
 import { prisma } from '../lib/prisma';
 import { ChatRoomType } from '@prisma/client';
@@ -322,5 +323,101 @@ export class ChatController {
     });
 
     ApiResponse.ok(res, 'Available clients retrieved', clients);
+  };
+
+  // File upload endpoints
+  uploadFile = async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.file) {
+        return ApiResponse.send({ res, statusCode: 400, success: false, message: 'No file uploaded' });
+      }
+
+      const { buffer, originalname, mimetype, size } = req.file;
+      
+      // Check file size (5MB limit)
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (size > maxSize) {
+        return ApiResponse.send({ res, statusCode: 400, success: false, message: 'File too large. Maximum size is 5MB' });
+      }
+
+      const uploadResult = await FileUploadService.uploadFile(buffer, originalname, mimetype);
+      
+      ApiResponse.ok(res, 'File uploaded successfully', uploadResult);
+    } catch (error: any) {
+      console.error('File upload error:', error);
+      ApiResponse.send({ res, statusCode: 500, success: false, message: 'Failed to upload file' });
+    }
+  };
+
+  // Enhanced message sending with attachments
+  sendMessageWithAttachments = async (req: AuthRequest, res: Response) => {
+    const { roomId, content, messageType = 'TEXT', attachments = [] } = req.body;
+    const userId = req.user!.id;
+
+    if (!roomId) {
+      return ApiResponse.send({ res, statusCode: 400, success: false, message: 'Room ID is required' });
+    }
+
+    // For text messages, content is required
+    if (messageType === 'TEXT' && (!content || !content.trim())) {
+      return ApiResponse.send({ res, statusCode: 400, success: false, message: 'Message content is required for text messages' });
+    }
+
+    try {
+      const message = await prisma.chatMessage.create({
+        data: {
+          chatRoomId: roomId,
+          senderId: userId,
+          senderType: 'user', // This could be determined based on user type
+          content: messageType === 'TEXT' ? content.trim() : null,
+          messageType: messageType as any,
+        },
+      });
+
+      // Create attachment records if any
+      if (attachments.length > 0) {
+        const attachmentData = attachments.map((att: any) => ({
+          messageId: message.id,
+          fileName: att.fileName,
+          fileUrl: att.fileUrl,
+          fileType: att.fileType,
+          fileSize: att.fileSize,
+          mimeType: att.mimeType,
+          duration: att.duration,
+          thumbnailUrl: att.thumbnailUrl,
+        }));
+
+        await prisma.chatAttachment.createMany({
+          data: attachmentData,
+        });
+      }
+
+      // Get the complete message with attachments using raw query for now
+      const completeMessage = await prisma.$queryRaw`
+        SELECT 
+          m.*,
+          JSON_AGG(
+            JSON_BUILD_OBJECT(
+              'id', a.id,
+              'fileName', a.file_name,
+              'fileUrl', a.file_url,
+              'fileType', a.file_type,
+              'fileSize', a.file_size,
+              'mimeType', a.mime_type,
+              'duration', a.duration,
+              'thumbnailUrl', a.thumbnail_url
+            )
+          ) as attachments
+        FROM chat_message m
+        LEFT JOIN chat_attachment a ON m.id = a.message_id
+        WHERE m.id = ${message.id}
+        GROUP BY m.id
+      `;
+
+      ApiResponse.ok(res, 'Message sent', completeMessage[0]);
+    } catch (error: any) {
+      console.error('Send message error:', error);
+      ApiResponse.send({ res, statusCode: 403, success: false, message: error.message });
+    }
   };
 }

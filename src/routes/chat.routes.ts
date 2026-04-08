@@ -1,9 +1,34 @@
 import { Router } from 'express';
 import { ChatController } from '../controllers/chat.controller';
 import { authenticate } from '../middleware/auth';
+import multer from 'multer';
 
 const router = Router();
 const controller = new ChatController();
+
+// Multer configuration for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Allow images, documents, audio, and video files
+    const allowedTypes = [
+      'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+      'application/pdf', 'application/msword', 
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/ogg',
+      'video/mp4', 'video/avi', 'video/mov'
+    ];
+    
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type'));
+    }
+  },
+});
 
 router.use(authenticate);
 
@@ -30,5 +55,9 @@ router.post('/client/rooms/:roomId/send', controller.clientSendMessage);
 router.get('/agency/rooms', controller.agencyGetMyRooms);
 router.post('/agency/rooms', controller.agencyGetOrCreateRoom);
 router.get('/agency/clients', controller.getAvailableClients);
+
+// File upload and enhanced message endpoints
+router.post('/upload', upload.single('file'), controller.uploadFile);
+router.post('/rooms/:roomId/send-with-attachments', controller.sendMessageWithAttachments);
 
 export default router;

@@ -1317,6 +1317,26 @@ enum MessageStatus {
   READ
 }
 
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+}
+
+enum AttachmentType {
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+  PDF
+  WORD
+  EXCEL
+  POWERPOINT
+  OTHER
+}
+
 enum ChatRoomType {
   HR_WORKER
   CLIENT_AGENCY
@@ -1358,16 +1378,36 @@ model ChatMessage {
   chatRoomId  String        @map("chat_room_id")
   senderId    String        @map("sender_id")
   senderType  String        @map("sender_type") // 'user' or 'client_user'
-  content     String
+  content     String?
+  messageType  MessageType  @default(TEXT) @map("message_type")
   status      MessageStatus @default(SENT)
   createdAt   DateTime      @default(now()) @map("created_at")
   readAt      DateTime?     @map("read_at")
 
   chatRoom    ChatRoom      @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
   senderUser  User?         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  attachments ChatAttachment[]
 
   @@index([chatRoomId, createdAt])
   @@map("chat_message")
+}
+
+model ChatAttachment {
+  id          String           @id @default(uuid())
+  messageId   String           @map("message_id")
+  fileName    String           @map("file_name")
+  fileUrl     String           @map("file_url")
+  fileType    AttachmentType   @map("file_type")
+  fileSize    Int              @map("file_size")
+  mimeType    String           @map("mime_type")
+  duration    Int?             @map("duration") // For audio/video in seconds
+  thumbnailUrl String?         @map("thumbnail_url")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  message     ChatMessage      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@map("chat_attachment")
 }
 
 // ============================================================
