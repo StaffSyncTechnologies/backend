@@ -6,9 +6,9 @@ async function seedWorkerHomepage() {
   try {
     console.log('Seeding homepage data for John Smith...');
 
-    // Find John Smith
+    // Find John Smith (John Davis)
     const johnSmith = await prisma.user.findFirst({
-      where: { email: 'john.smith@test.com' },
+      where: { email: 'john.davis@staffsync-demo.com' },
       include: { organization: true }
     });
 
