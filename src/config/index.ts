@@ -56,8 +56,8 @@ export const config = {
         name: 'Starter',
         minWorkers: 1,
         maxWorkers: 10,
-        monthlyPricePerWorker: parseInt(process.env.STRIPE_STARTER_MONTHLY_PER_WORKER || '250', 10),  // £2.50/worker/month
-        yearlyPricePerWorker: parseInt(process.env.STRIPE_STARTER_YEARLY_PER_WORKER || '200', 10),    // £2.00/worker/month (billed annually)
+        monthlyPricePerWorker: parseInt(process.env.STRIPE_STARTER_MONTHLY_PER_WORKER || '500', 10),  // £5.00/worker/month
+        yearlyPricePerWorker: parseInt(process.env.STRIPE_STARTER_YEARLY_PER_WORKER || '400', 10),    // £4.00/worker/month (billed annually)
         stripePriceId: process.env.STRIPE_STARTER_PRICE_ID || '',
         features: [
           'Basic scheduling & time tracking',
@@ -70,8 +70,8 @@ export const config = {
         name: 'Professional',
         minWorkers: 11,
         maxWorkers: 50,
-        monthlyPricePerWorker: parseInt(process.env.STRIPE_PROFESSIONAL_MONTHLY_PER_WORKER || '350', 10),  // £3.50/worker/month
-        yearlyPricePerWorker: parseInt(process.env.STRIPE_PROFESSIONAL_YEARLY_PER_WORKER || '300', 10),    // £3.00/worker/month (billed annually)
+        monthlyPricePerWorker: parseInt(process.env.STRIPE_PROFESSIONAL_MONTHLY_PER_WORKER || '400', 10),  // £4.00/worker/month
+        yearlyPricePerWorker: parseInt(process.env.STRIPE_PROFESSIONAL_YEARLY_PER_WORKER || '350', 10),    // £3.50/worker/month (billed annually)
         stripePriceId: process.env.STRIPE_PROFESSIONAL_PRICE_ID || '',
         features: [
           'Everything in Starter',
@@ -86,8 +86,8 @@ export const config = {
         name: 'Business',
         minWorkers: 51,
         maxWorkers: 200,
-        monthlyPricePerWorker: parseInt(process.env.STRIPE_BUSINESS_MONTHLY_PER_WORKER || '450', 10),  // £4.50/worker/month
-        yearlyPricePerWorker: parseInt(process.env.STRIPE_BUSINESS_YEARLY_PER_WORKER || '400', 10),    // £4.00/worker/month (billed annually)
+        monthlyPricePerWorker: parseInt(process.env.STRIPE_BUSINESS_MONTHLY_PER_WORKER || '300', 10),  // £3.00/worker/month
+        yearlyPricePerWorker: parseInt(process.env.STRIPE_BUSINESS_YEARLY_PER_WORKER || '250', 10),    // £2.50/worker/month (billed annually)
         stripePriceId: process.env.STRIPE_BUSINESS_PRICE_ID || '',
         features: [
           'Everything in Professional',
