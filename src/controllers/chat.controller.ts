@@ -355,6 +355,7 @@ export class ChatController {
     const { content, messageType = 'TEXT', attachments = [] } = req.body;
     const userId = req.user!.id;
 
+    
     if (!roomId) {
       return ApiResponse.send({ res, statusCode: 400, success: false, message: 'Room ID is required' });
     }
@@ -365,6 +366,7 @@ export class ChatController {
     }
 
     try {
+      console.log('Creating message with userId:', userId);
       const message = await prisma.chatMessage.create({
         data: {
           chatRoomId: roomId,
@@ -374,8 +376,10 @@ export class ChatController {
           messageType: messageType as any,
         },
       });
+      console.log('Message created:', message);
 
       // Create attachment records if any
+      let createdAttachments: any[] = [];
       if (attachments.length > 0) {
         const attachmentData = attachments.map((att: any) => ({
           messageId: message.id,
@@ -391,31 +395,26 @@ export class ChatController {
         await prisma.chatAttachment.createMany({
           data: attachmentData,
         });
+
+        // Fetch the created attachments
+        const fetchedAttachments = await prisma.chatAttachment.findMany({
+          where: { messageId: message.id }
+        });
+        createdAttachments = fetchedAttachments;
       }
 
-      // Get the complete message with attachments using raw query for now
-      const completeMessage = await prisma.$queryRaw`
-        SELECT 
-          m.*,
-          JSON_AGG(
-            JSON_BUILD_OBJECT(
-              'id', a.id,
-              'fileName', a.file_name,
-              'fileUrl', a.file_url,
-              'fileType', a.file_type,
-              'fileSize', a.file_size,
-              'mimeType', a.mime_type,
-              'duration', a.duration,
-              'thumbnailUrl', a.thumbnail_url
-            )
-          ) as attachments
-        FROM chat_message m
-        LEFT JOIN chat_attachment a ON m.id = a.message_id
-        WHERE m.id = ${message.id}
-        GROUP BY m.id
-      ` as any[];
+      // Create the complete message object
+      const completeMessage = {
+        ...message,
+        attachments: createdAttachments
+      };
 
-      ApiResponse.ok(res, 'Message sent', completeMessage[0]);
+      console.log('HTTP endpoint broadcasting message to room:', roomId, 'Message:', completeMessage);
+      console.log('Message senderId:', completeMessage.senderId, 'User ID:', userId);
+      const { SocketService } = require('../services/chat/socket.service');
+      SocketService.emitToRoom(roomId, 'chat:message', completeMessage);
+
+      ApiResponse.ok(res, 'Message sent', completeMessage);
     } catch (error: any) {
       console.error('Send message error:', error);
       ApiResponse.send({ res, statusCode: 403, success: false, message: error.message });

@@ -71,7 +71,7 @@ export class FileUploadService {
 
     // Generate file URL
     const relativePath = path.relative(process.cwd(), filePath);
-    const fileUrl = `${config.upload.baseUrl}/${relativePath.replace(/\\/g, '/')}`;
+    const fileUrl = `${config.upload.baseUrl}/${relativePath.replace(/\\/g, '/').replace(/^uploads\//, '')}`;
 
     const fileSize = buffer.length;
 

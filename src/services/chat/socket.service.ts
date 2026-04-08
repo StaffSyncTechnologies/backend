@@ -149,7 +149,7 @@ export class SocketService {
 
   private static async handleMessage(
     socket: AuthenticatedSocket,
-    data: { roomId: string; content: string }
+    data: { roomId: string; content: string; attachments?: any[] }
   ) {
     try {
       const room = await ChatService.getRoomById(data.roomId, socket.userId, socket.userType || 'user');
@@ -167,8 +167,40 @@ export class SocketService {
         content: data.content,
       });
 
+      // Create attachment records if any
+      let attachments: any[] = [];
+      if (data.attachments && data.attachments.length > 0) {
+        const attachmentData = data.attachments.map((att: any) => ({
+          messageId: message.id,
+          fileName: att.fileName,
+          fileUrl: att.fileUrl,
+          fileType: att.fileType,
+          fileSize: att.fileSize,
+          mimeType: att.mimeType,
+          duration: att.duration,
+          thumbnailUrl: att.thumbnailUrl,
+        }));
+
+        await prisma.chatAttachment.createMany({
+          data: attachmentData,
+        });
+
+        // Fetch the created attachments
+        const createdAttachments = await prisma.chatAttachment.findMany({
+          where: { messageId: message.id }
+        });
+        attachments = createdAttachments;
+      }
+
+      // Create the complete message object
+      const completeMessage = {
+        ...message,
+        attachments
+      };
+
       // Emit to all users in the room
-      this.io.to(`room:${data.roomId}`).emit('chat:message', message);
+      console.log('Broadcasting message to room:', data.roomId, 'Message:', completeMessage);
+      this.io.to(`room:${data.roomId}`).emit('chat:message', completeMessage);
 
       // Also emit to recipient's user room (for notification if not in chat room)
       let recipientId: string | undefined;

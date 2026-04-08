@@ -228,9 +228,11 @@ export class ChatService {
             agencyUser: { select: { id: true, fullName: true, role: true } },
           },
         },
+        attachments: true,
       },
     });
 
+    
     return messages.reverse();
   }
 
