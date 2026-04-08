@@ -351,7 +351,8 @@ export class ChatController {
 
   // Enhanced message sending with attachments
   sendMessageWithAttachments = async (req: AuthRequest, res: Response) => {
-    const { roomId, content, messageType = 'TEXT', attachments = [] } = req.body;
+    const { roomId } = req.params;
+    const { content, messageType = 'TEXT', attachments = [] } = req.body;
     const userId = req.user!.id;
 
     if (!roomId) {
@@ -412,7 +413,7 @@ export class ChatController {
         LEFT JOIN chat_attachment a ON m.id = a.message_id
         WHERE m.id = ${message.id}
         GROUP BY m.id
-      `;
+      ` as any[];
 
       ApiResponse.ok(res, 'Message sent', completeMessage[0]);
     } catch (error: any) {
