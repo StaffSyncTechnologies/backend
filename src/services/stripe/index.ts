@@ -627,8 +627,12 @@ class StripeService {
         pricePerWorker: pricePerWorker || 0,
         workerLimit: plan.workerLimit,
         clientLimit: plan.clientLimit,
-        currentPeriodStart: new Date((stripeSubscription as any).current_period_start * 1000),
-        currentPeriodEnd: new Date((stripeSubscription as any).current_period_end * 1000),
+        currentPeriodStart: (stripeSubscription as any).current_period_start
+          ? new Date((stripeSubscription as any).current_period_start * 1000)
+          : new Date(),
+        currentPeriodEnd: (stripeSubscription as any).current_period_end
+          ? new Date((stripeSubscription as any).current_period_end * 1000)
+          : new Date(),
         cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
         canceledAt: stripeSubscription.canceled_at
           ? new Date(stripeSubscription.canceled_at * 1000)
@@ -650,8 +654,12 @@ class StripeService {
         pricePerWorker: pricePerWorker || 0,
         workerLimit: plan.workerLimit,
         clientLimit: plan.clientLimit,
-        currentPeriodStart: new Date((stripeSubscription as any).current_period_start * 1000),
-        currentPeriodEnd: new Date((stripeSubscription as any).current_period_end * 1000),
+        currentPeriodStart: (stripeSubscription as any).current_period_start
+          ? new Date((stripeSubscription as any).current_period_start * 1000)
+          : new Date(),
+        currentPeriodEnd: (stripeSubscription as any).current_period_end
+          ? new Date((stripeSubscription as any).current_period_end * 1000)
+          : new Date(),
         cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
         canceledAt: stripeSubscription.canceled_at
           ? new Date(stripeSubscription.canceled_at * 1000)
