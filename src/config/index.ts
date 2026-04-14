@@ -59,9 +59,9 @@ export const config = {
         maxWorkers: parseInt(process.env.STRIPE_STARTER_MAX_WORKERS || '10', 10),
         monthlyPricePerWorker: parseInt(process.env.STRIPE_STARTER_MONTHLY_PRICE_PER_WORKER || '500', 10),
         yearlyPricePerWorker: parseInt(process.env.STRIPE_STARTER_YEARLY_PRICE_PER_WORKER || '400', 10),
-        stripePriceId: process.env.STRIPE_STARTER_MONTHLY_PRICE_ID || '',
-        monthlyStripePriceId: process.env.STRIPE_STARTER_MONTHLY_PRICE_ID || '',
-        yearlyStripePriceId: process.env.STRIPE_STARTER_YEARLY_PRICE_ID || '',
+        stripePriceId: process.env.STRIPE_STARTER_MONTHLY_PRICE_ID_TEST || process.env.STRIPE_STARTER_MONTHLY_PRICE_ID || '',
+        monthlyStripePriceId: process.env.STRIPE_STARTER_MONTHLY_PRICE_ID_TEST || process.env.STRIPE_STARTER_MONTHLY_PRICE_ID || '',
+        yearlyStripePriceId: process.env.STRIPE_STARTER_YEARLY_PRICE_ID_TEST || process.env.STRIPE_STARTER_YEARLY_PRICE_ID || '',
         features: [
           'Basic scheduling & time tracking',
           'Mobile app access',
