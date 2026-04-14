@@ -280,8 +280,8 @@ export class SubscriptionController {
     }
 
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const successUrl = `${baseUrl}/settings/billing?success=true&session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = `${baseUrl}/settings/billing?canceled=true`;
+    const successUrl = `${baseUrl}/#/settings/billing?success=true&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${baseUrl}/#/settings/billing?canceled=true`;
 
     const session = await stripeService.createCheckoutSession(
       organizationId,
