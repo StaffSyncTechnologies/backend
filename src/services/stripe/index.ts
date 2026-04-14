@@ -499,7 +499,7 @@ class StripeService {
         console.warn('Stripe price IDs not configured for test mode, returning mock session');
         return {
           id: 'demo_session_' + Date.now(),
-          url: successUrl.replace('{CHECKOUT_SESSION_ID}', 'demo').replace('?success=true', '?success=demo'),
+          url: successUrl.replace('{CHECKOUT_SESSION_ID}', 'demo').replace('?success=true', '?success=demo').replace('/settings/', '/#/settings/'),
         } as Stripe.Checkout.Session;
       }
       throw error;
