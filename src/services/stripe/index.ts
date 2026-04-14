@@ -461,7 +461,7 @@ class StripeService {
       : ((plan as any).monthlyStripePriceId || (plan as any).stripePriceId);
     
     if (!priceId) {
-      throw new Error(`No Stripe price ID configured for ${planTier} ${billingCycle} plan`);
+      throw new Error(`No Stripe price ID configured for ${planTier} ${billingCycle} plan. Please check environment variables.`);
     }
     
     const customerId = await this.getOrCreateCustomer(organizationId);
