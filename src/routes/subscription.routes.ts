@@ -48,38 +48,29 @@ router.get('/worker-limit', asyncHandler(controller.checkWorkerLimit));
 // Get upgrade options
 router.get('/upgrade-options', asyncHandler(controller.getUpgradeOptions));
 
-// Admin-only routes
-router.use(authorizeAdmin);
-
-// Create checkout session
+// User subscription management endpoints (authenticated users only)
 router.post('/checkout', asyncHandler(controller.createCheckoutSession));
 
-// Create subscription directly
 router.post('/', asyncHandler(controller.createSubscription));
 
-// Update subscription (upgrade/downgrade)
 router.put('/', asyncHandler(controller.updateSubscription));
 
-// Update worker count
 router.put('/worker-count', asyncHandler(controller.updateWorkerCount));
 
-// Upgrade plan (tier/billing cycle/worker count)
 router.post('/upgrade', asyncHandler(controller.upgradePlan));
 
-// Cancel subscription
 router.post('/cancel', asyncHandler(controller.cancelSubscription));
 
-// Resume canceled subscription
 router.post('/resume', asyncHandler(controller.resumeSubscription));
 
-// Get billing portal URL
 router.post('/billing-portal', asyncHandler(controller.getBillingPortal));
 
-// Create setup intent for adding payment method
 router.post('/setup-intent', asyncHandler(controller.createSetupIntent));
 
-// Request enterprise plan (contact us)
 router.post('/enterprise-request', asyncHandler(controller.requestEnterprisePlan));
+
+// Admin-only routes
+router.use(authorizeAdmin);
 
 // Export both routers
 export { webhookRouter };

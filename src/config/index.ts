@@ -55,11 +55,13 @@ export const config = {
     perWorkerPricing: {
       starter: {
         name: 'Starter',
-        minWorkers: 1,
-        maxWorkers: 10,
-        monthlyPricePerWorker: parseInt(process.env.STRIPE_STARTER_MONTHLY_PER_WORKER || '500', 10),  // £5.00/worker/month
-        yearlyPricePerWorker: parseInt(process.env.STRIPE_STARTER_YEARLY_PER_WORKER || '400', 10),    // £4.00/worker/month (billed annually)
-        stripePriceId: process.env.STRIPE_STARTER_PRICE_ID || '',
+        minWorkers: parseInt(process.env.STRIPE_STARTER_MIN_WORKERS || '1', 10),
+        maxWorkers: parseInt(process.env.STRIPE_STARTER_MAX_WORKERS || '10', 10),
+        monthlyPricePerWorker: parseInt(process.env.STRIPE_STARTER_MONTHLY_PRICE_PER_WORKER || '500', 10),
+        yearlyPricePerWorker: parseInt(process.env.STRIPE_STARTER_YEARLY_PRICE_PER_WORKER || '400', 10),
+        stripePriceId: process.env.STRIPE_STARTER_MONTHLY_PRICE_ID || '',
+        monthlyStripePriceId: process.env.STRIPE_STARTER_MONTHLY_PRICE_ID || '',
+        yearlyStripePriceId: process.env.STRIPE_STARTER_YEARLY_PRICE_ID || '',
         features: [
           'Basic scheduling & time tracking',
           'Mobile app access',
@@ -69,11 +71,13 @@ export const config = {
       },
       professional: {
         name: 'Professional',
-        minWorkers: 11,
-        maxWorkers: 50,
-        monthlyPricePerWorker: parseInt(process.env.STRIPE_PROFESSIONAL_MONTHLY_PER_WORKER || '400', 10),  // £4.00/worker/month
-        yearlyPricePerWorker: parseInt(process.env.STRIPE_PROFESSIONAL_YEARLY_PER_WORKER || '350', 10),    // £3.50/worker/month (billed annually)
-        stripePriceId: process.env.STRIPE_PROFESSIONAL_PRICE_ID || '',
+        minWorkers: parseInt(process.env.STRIPE_PROFESSIONAL_MIN_WORKERS || '11', 10),
+        maxWorkers: parseInt(process.env.STRIPE_PROFESSIONAL_MAX_WORKERS || '50', 10),
+        monthlyPricePerWorker: parseInt(process.env.STRIPE_PROFESSIONAL_MONTHLY_PRICE_PER_WORKER || '400', 10),
+        yearlyPricePerWorker: parseInt(process.env.STRIPE_PROFESSIONAL_YEARLY_PRICE_PER_WORKER || '350', 10),
+        stripePriceId: process.env.STRIPE_PROFESSIONAL_MONTHLY_PRICE_ID || '',
+        monthlyStripePriceId: process.env.STRIPE_PROFESSIONAL_MONTHLY_PRICE_ID || '',
+        yearlyStripePriceId: process.env.STRIPE_PROFESSIONAL_YEARLY_PRICE_ID || '',
         features: [
           'Everything in Starter',
           'Advanced reporting & analytics',
@@ -85,11 +89,13 @@ export const config = {
       },
       business: {
         name: 'Business',
-        minWorkers: 51,
-        maxWorkers: 200,
-        monthlyPricePerWorker: parseInt(process.env.STRIPE_BUSINESS_MONTHLY_PER_WORKER || '300', 10),  // £3.00/worker/month
-        yearlyPricePerWorker: parseInt(process.env.STRIPE_BUSINESS_YEARLY_PER_WORKER || '250', 10),    // £2.50/worker/month (billed annually)
-        stripePriceId: process.env.STRIPE_BUSINESS_PRICE_ID || '',
+        minWorkers: parseInt(process.env.STRIPE_BUSINESS_MIN_WORKERS || '51', 10),
+        maxWorkers: parseInt(process.env.STRIPE_BUSINESS_MAX_WORKERS || '200', 10),
+        monthlyPricePerWorker: parseInt(process.env.STRIPE_BUSINESS_MONTHLY_PRICE_PER_WORKER || '300', 10),
+        yearlyPricePerWorker: parseInt(process.env.STRIPE_BUSINESS_YEARLY_PRICE_PER_WORKER || '250', 10),
+        stripePriceId: process.env.STRIPE_BUSINESS_MONTHLY_PRICE_ID || '',
+        monthlyStripePriceId: process.env.STRIPE_BUSINESS_MONTHLY_PRICE_ID || '',
+        yearlyStripePriceId: process.env.STRIPE_BUSINESS_YEARLY_PRICE_ID || '',
         features: [
           'Everything in Professional',
           'Compliance management',
@@ -101,11 +107,13 @@ export const config = {
       },
       enterprise: {
         name: 'Enterprise',
-        minWorkers: 201,
-        maxWorkers: -1, // unlimited
+        minWorkers: parseInt(process.env.STRIPE_ENTERPRISE_MIN_WORKERS || '201', 10),
+        maxWorkers: parseInt(process.env.STRIPE_ENTERPRISE_MAX_WORKERS || '-1', 10),
         monthlyPricePerWorker: null, // custom pricing
         yearlyPricePerWorker: null,
-        stripePriceId: process.env.STRIPE_ENTERPRISE_PRICE_ID || '',
+        stripePriceId: process.env.STRIPE_ENTERPRISE_MONTHLY_PRICE_ID || '',
+        monthlyStripePriceId: process.env.STRIPE_ENTERPRISE_MONTHLY_PRICE_ID || '',
+        yearlyStripePriceId: process.env.STRIPE_ENTERPRISE_YEARLY_PRICE_ID || '',
         isCustomPricing: true,
         features: [
           'Everything in Business',

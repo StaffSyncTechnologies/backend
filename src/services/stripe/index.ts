@@ -74,12 +74,12 @@ export const PLANS = {
     monthlyPricePerWorker: 0,
     yearlyPricePerWorker: 0,
     minWorkers: 1,
-    maxWorkers: 10,
-    workerLimit: 10,
+    maxWorkers: -1,
+    workerLimit: -1,
     clientLimit: -1,
     features: [
       `${FREE_TRIAL_DAYS}-day free trial`,
-      'Up to 10 workers',
+      'Unlimited workers',
       'Full scheduling features',
       'Time tracking & timesheets',
       'Invoicing & payroll',
@@ -96,6 +96,8 @@ export const PLANS = {
     workerLimit: config.stripe.perWorkerPricing.starter.maxWorkers,
     clientLimit: -1,
     stripePriceId: config.stripe.perWorkerPricing.starter.stripePriceId,
+    monthlyStripePriceId: (config.stripe.perWorkerPricing.starter as any).monthlyStripePriceId,
+    yearlyStripePriceId: (config.stripe.perWorkerPricing.starter as any).yearlyStripePriceId,
     features: config.stripe.perWorkerPricing.starter.features,
   },
   PROFESSIONAL: {
@@ -107,6 +109,8 @@ export const PLANS = {
     workerLimit: config.stripe.perWorkerPricing.professional.maxWorkers,
     clientLimit: -1,
     stripePriceId: config.stripe.perWorkerPricing.professional.stripePriceId,
+    monthlyStripePriceId: (config.stripe.perWorkerPricing.professional as any).monthlyStripePriceId,
+    yearlyStripePriceId: (config.stripe.perWorkerPricing.professional as any).yearlyStripePriceId,
     features: config.stripe.perWorkerPricing.professional.features,
   },
   BUSINESS: {
@@ -118,6 +122,8 @@ export const PLANS = {
     workerLimit: config.stripe.perWorkerPricing.business.maxWorkers,
     clientLimit: -1,
     stripePriceId: config.stripe.perWorkerPricing.business.stripePriceId,
+    monthlyStripePriceId: (config.stripe.perWorkerPricing.business as any).monthlyStripePriceId,
+    yearlyStripePriceId: (config.stripe.perWorkerPricing.business as any).yearlyStripePriceId,
     features: config.stripe.perWorkerPricing.business.features,
   },
   ENTERPRISE: {
@@ -129,6 +135,8 @@ export const PLANS = {
     workerLimit: -1,
     clientLimit: -1,
     stripePriceId: config.stripe.perWorkerPricing.enterprise.stripePriceId,
+    monthlyStripePriceId: (config.stripe.perWorkerPricing.enterprise as any).monthlyStripePriceId,
+    yearlyStripePriceId: (config.stripe.perWorkerPricing.enterprise as any).yearlyStripePriceId,
     isCustomPricing: true,
     features: config.stripe.perWorkerPricing.enterprise.features,
   },
@@ -448,10 +456,12 @@ class StripeService {
       throw new Error('Enterprise plan requires custom pricing. Please contact sales.');
     }
     
-    const priceId = (plan as any).stripePriceId;
+    const priceId = billingCycle === 'yearly'
+      ? ((plan as any).yearlyStripePriceId || (plan as any).stripePriceId)
+      : ((plan as any).monthlyStripePriceId || (plan as any).stripePriceId);
     
     if (!priceId) {
-      throw new Error(`No Stripe price ID configured for ${planTier} plan`);
+      throw new Error(`No Stripe price ID configured for ${planTier} ${billingCycle} plan`);
     }
     
     const customerId = await this.getOrCreateCustomer(organizationId);
@@ -836,7 +846,7 @@ class StripeService {
       }),
     ]);
 
-    const workerLimit = subscription?.workerLimit || 10;
+    const workerLimit = subscription?.workerLimit || -1;
     const clientLimit = subscription?.clientLimit || 5;
 
     return {
