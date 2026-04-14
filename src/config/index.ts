@@ -75,9 +75,9 @@ export const config = {
         maxWorkers: parseInt(process.env.STRIPE_PROFESSIONAL_MAX_WORKERS || '50', 10),
         monthlyPricePerWorker: parseInt(process.env.STRIPE_PROFESSIONAL_MONTHLY_PRICE_PER_WORKER || '400', 10),
         yearlyPricePerWorker: parseInt(process.env.STRIPE_PROFESSIONAL_YEARLY_PRICE_PER_WORKER || '350', 10),
-        stripePriceId: process.env.STRIPE_PROFESSIONAL_MONTHLY_PRICE_ID || '',
-        monthlyStripePriceId: process.env.STRIPE_PROFESSIONAL_MONTHLY_PRICE_ID || '',
-        yearlyStripePriceId: process.env.STRIPE_PROFESSIONAL_YEARLY_PRICE_ID || '',
+        stripePriceId: process.env.STRIPE_PROFESSIONAL_MONTHLY_PRICE_ID_TEST || process.env.STRIPE_PROFESSIONAL_MONTHLY_PRICE_ID || '',
+        monthlyStripePriceId: process.env.STRIPE_PROFESSIONAL_MONTHLY_PRICE_ID_TEST || process.env.STRIPE_PROFESSIONAL_MONTHLY_PRICE_ID || '',
+        yearlyStripePriceId: process.env.STRIPE_PROFESSIONAL_YEARLY_PRICE_ID_TEST || process.env.STRIPE_PROFESSIONAL_YEARLY_PRICE_ID || '',
         features: [
           'Everything in Starter',
           'Advanced reporting & analytics',
