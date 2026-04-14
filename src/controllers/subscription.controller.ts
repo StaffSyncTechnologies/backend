@@ -283,32 +283,19 @@ export class SubscriptionController {
     const successUrl = `${baseUrl}/settings/billing?success=true&session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${baseUrl}/settings/billing?canceled=true`;
 
-    try {
-      const session = await stripeService.createCheckoutSession(
-        organizationId,
-        planTier as PlanTier,
-        billingCycle,
-        successUrl,
-        cancelUrl,
-        workerCount
-      );
+    const session = await stripeService.createCheckoutSession(
+      organizationId,
+      planTier as PlanTier,
+      billingCycle,
+      successUrl,
+      cancelUrl,
+      workerCount
+    );
 
-      ApiResponse.ok(res, 'Checkout session created', {
-        sessionId: session.id,
-        url: session.url,
-      });
-    } catch (stripeError: any) {
-      // For demo/testing: if Stripe is not configured for test mode, return a mock response
-      if (stripeError.message?.includes('test mode key was used') || stripeError.message?.includes('No such price')) {
-        console.warn('Stripe not configured for test mode, returning mock checkout URL');
-        ApiResponse.ok(res, 'Checkout session created (demo mode)', {
-          sessionId: 'demo_session_' + Date.now(),
-          url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/settings/billing?success=demo`,
-        });
-      } else {
-        throw stripeError;
-      }
-    }
+    ApiResponse.ok(res, 'Checkout session created', {
+      sessionId: session.id,
+      url: session.url,
+    });
   };
 
   /**
