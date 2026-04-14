@@ -59,6 +59,8 @@ router.put('/worker-count', asyncHandler(controller.updateWorkerCount));
 
 router.post('/upgrade', asyncHandler(controller.upgradePlan));
 
+router.post('/manual-sync', asyncHandler(controller.manualSyncSubscription));
+
 router.post('/cancel', asyncHandler(controller.cancelSubscription));
 
 router.post('/resume', asyncHandler(controller.resumeSubscription));

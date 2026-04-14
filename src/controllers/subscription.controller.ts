@@ -771,6 +771,26 @@ export class SubscriptionController {
   };
 
   /**
+   * Manually sync subscription from Stripe (for debugging)
+   */
+  manualSyncSubscription = async (req: AuthRequest, res: Response) => {
+    const organizationId = req.user!.organizationId;
+    const { stripeSubscriptionId } = req.body;
+
+    if (!stripeSubscriptionId) {
+      throw new AppError('Stripe subscription ID is required', 400);
+    }
+
+    try {
+      await stripeService.syncSubscriptionFromStripe(stripeSubscriptionId, organizationId);
+
+      ApiResponse.ok(res, 'Subscription synced successfully');
+    } catch (error: any) {
+      throw new AppError(`Failed to sync subscription: ${error.message}`, 500);
+    }
+  };
+
+  /**
    * Handle Stripe webhook
    */
   handleWebhook = async (req: Request, res: Response) => {

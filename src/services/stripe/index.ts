@@ -575,6 +575,15 @@ class StripeService {
   }
 
   /**
+   * Sync subscription from Stripe by ID
+   */
+  async syncSubscriptionFromStripe(stripeSubscriptionId: string, organizationId: string): Promise<void> {
+    if (!stripe) throw new Error('Stripe not initialized');
+    const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+    await this.syncSubscriptionToDatabase(subscription, organizationId);
+  }
+
+  /**
    * Sync Stripe subscription to database
    */
   async syncSubscriptionToDatabase(
