@@ -284,7 +284,7 @@ export class SubscriptionNotificationService {
           
           <p style="color: #6b7280; font-size: 14px; margin-bottom: 0;">
             Organization: ${orgName}<br>
-            Need help? <a href="mailto:support@staffsync.com" style="color: #2563eb;">Contact Support</a>
+            Need help? <a href="mailto:info@staffsynctech.co.uk" style="color: #2563eb;">Contact Support</a>
           </p>
         </div>
         
