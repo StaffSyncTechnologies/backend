@@ -628,7 +628,7 @@ class StripeService {
         workerLimit: plan.workerLimit,
         clientLimit: plan.clientLimit,
         currentPeriodStart: new Date(),
-        currentPeriodEnd: new Date(),
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
         cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
         canceledAt: stripeSubscription.canceled_at
           ? new Date(stripeSubscription.canceled_at * 1000)
@@ -651,7 +651,7 @@ class StripeService {
         workerLimit: plan.workerLimit,
         clientLimit: plan.clientLimit,
         currentPeriodStart: new Date(),
-        currentPeriodEnd: new Date(),
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
         cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
         canceledAt: stripeSubscription.canceled_at
           ? new Date(stripeSubscription.canceled_at * 1000)
