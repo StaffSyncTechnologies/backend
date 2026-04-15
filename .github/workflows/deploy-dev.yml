@@ -20,6 +20,11 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+      - name: Check SSH secrets are present
+        run: |
+           test -n "${{ secrets.DROPLET_HOST }}" || (echo "DROPLET_HOST missing" && exit 1)
+           test -n "${{ secrets.DROPLET_USER }}" || (echo "DROPLET_USER missing" && exit 1)
+           test -n "${{ secrets.DROPLET_SSH_KEY }}" || (echo "DROPLET_SSH_KEY missing" && exit 1)
 
       - name: Deploy to Droplet
         uses: appleboy/ssh-action@v1.0.0
