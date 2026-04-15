@@ -1,0 +1,43 @@
+name: Deploy to DEV
+
+on:
+  push:
+    branches: [dev]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: dev
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Deploy to Droplet
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script: |
+            cd /var/www/staffsync-dev
+            git pull origin dev
+
+            cat > .env << EOF
+            NODE_ENV=development
+            PORT=3001
+            DATABASE_URL=${{ secrets.DEV_DATABASE_URL }}
+            JWT_SECRET=${{ secrets.DEV_JWT_SECRET }}
+            EOF
+
+            npm install
+            npm run db:migrate:deploy
+            pm2 restart staffsync-dev
