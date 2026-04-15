@@ -39,4 +39,4 @@ jobs:
 
             npm install
             npm run db:migrate:deploy
-            pm2 restart staffsync-dev
+            pm2 restart staffsync-backend
