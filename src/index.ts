@@ -8,6 +8,8 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import { errorHandler } from './middleware/errorHandler';
 import { notFoundHandler } from './middleware/notFoundHandler';
+import { validateApiKey } from './middleware/apiKey';
+import { globalLimiter } from './middleware/rateLimiter';
 import routes from './routes';
 import { prisma } from './lib/prisma';
 import { SocketService } from './services/chat';
@@ -22,26 +24,15 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 
-// CORS configuration - allow multiple origins
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:5173', // Vite default port
-  'http://localhost:5174', // Frontend dev server
-  'http://127.0.0.1:3000',
-  'http://127.0.0.1:5173',
-  'http://127.0.0.1:5174',
-  'http://127.0.0.1:51180',
-  'https://app.staffsynctech.co.uk', // Production frontend
-  process.env.CORS_ORIGIN,
-  process.env.FRONTEND_URL
-].filter(Boolean) as string[];
+// CORS configuration - allow any *.staffsynctech.co.uk subdomain
+const staffsyncPattern = /^https?:\/\/([a-z0-9-]+\.)*staffsynctech\.co\.uk$/;
 
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.includes(origin)) {
+    if (staffsyncPattern.test(origin)) {
       callback(null, true);
     } else {
       console.warn(`CORS blocked origin: ${origin}`);
@@ -50,9 +41,13 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-API-Key'],
 }));
 app.use(morgan('dev'));
+
+// API key validation & global rate limiting
+app.use(validateApiKey);
+app.use(globalLimiter);
 
 // Webhook route must be before express.json() to get raw body
 import { webhookRouter } from './routes/subscription.routes';
