@@ -29,12 +29,14 @@ jobs:
           key: ${{ secrets.DROPLET_SSH_KEY }}
           script: |
             cd /var/www/staffsync
+            git stash --include-untracked
             git pull origin dev
 
-            cat > .env << EOF
+            cat > .env << 'ENVEOF'
             ${{ secrets.DEV_ENV_FILE }}
-            EOF
+            ENVEOF
 
             npm install
+            npx prisma generate
             npm run db:migrate:deploy
-            pm2 restart staffsync-backend
+            pm2 restart staffsync-backend || pm2 start ecosystem.config.js

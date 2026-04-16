@@ -15,7 +15,7 @@ export const config = {
   upload: {
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '5242880', 10),
     uploadDir: process.env.UPLOAD_DIR || 'uploads',
-    baseUrl: process.env.UPLOAD_BASE_URL || 'https://app.staffsynctech.co.uk/uploads',
+    baseUrl: process.env.UPLOAD_BASE_URL,
   },
 
   supabase: {
