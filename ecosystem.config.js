@@ -20,8 +20,8 @@ module.exports = {
       }
     },
     {
-      name: "staffsync-prod",
-      cwd: "/var/www/staffsync-prod",
+      name: "staffsync-backend",
+      cwd: "/var/www/staffsync",
       script: "src/index.ts",
       exec_mode: "fork",
       instances: 1,
