@@ -70,9 +70,11 @@ interface NominatimSearchResponse {
 
 export class GeocodingService {
   private static instance: GeocodingService;
+  private static lastRequestTime = 0;
   
   // Using OpenStreetMap Nominatim API (free, no API key required)
   private readonly NOMINATIM_BASE_URL = 'https://nominatim.openstreetmap.org';
+  private readonly RATE_LIMIT_DELAY = 1000; // 1 second between requests
   
   static getInstance(): GeocodingService {
     if (!GeocodingService.instance) {
@@ -86,16 +88,29 @@ export class GeocodingService {
    */
   async geocodeAddress(address: string): Promise<GeocodingResult> {
     try {
+      // Rate limiting: wait if last request was too recent
+      const now = Date.now();
+      const timeSinceLastRequest = now - GeocodingService.lastRequestTime;
+      if (timeSinceLastRequest < this.RATE_LIMIT_DELAY) {
+        await new Promise(resolve => setTimeout(resolve, this.RATE_LIMIT_DELAY - timeSinceLastRequest));
+      }
+      
       const response = await fetch(
         `${this.NOMINATIM_BASE_URL}/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
         {
           headers: {
-            'User-Agent': 'StaffSync/1.0 (staffsync@example.com)' // Required by Nominatim
+            'User-Agent': 'StaffSync/1.0 (contact@staffsynctech.co.uk)' // Required by Nominatim
           }
         }
       );
 
       if (!response.ok) {
+        if (response.status === 403) {
+          throw new GeocodingError(
+            'Geocoding service temporarily unavailable due to rate limiting. Please try again later or provide coordinates manually.',
+            'GEOCODING_RATE_LIMITED'
+          );
+        }
         throw new GeocodingError(
           `Geocoding request failed with status ${response.status}: ${response.statusText}`,
           'GEOCODING_HTTP_ERROR'
@@ -103,6 +118,9 @@ export class GeocodingService {
       }
 
       const data = await response.json() as NominatimSearchResponse[];
+      
+      // Update last request time for rate limiting
+      GeocodingService.lastRequestTime = Date.now();
       
       if (!data || data.length === 0) {
         throw new GeocodingError(`No results found for address: "${address}"`, 'ADDRESS_NOT_FOUND');

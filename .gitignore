@@ -6,6 +6,8 @@ dist/
 
 # Environment
 .env
+.env.dev
+.env.prod
 .env.local
 .env.*.local
 
@@ -25,7 +27,7 @@ npm-debug.log*
 Thumbs.db
 
 # Uploads
-uploads/
+
 
 # Prisma
 prisma/migrations/

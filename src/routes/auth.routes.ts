@@ -4,18 +4,19 @@ import { OnboardingController } from '../controllers/onboarding.controller';
 import { AccountDeletionController } from '../controllers/accountDeletion.controller';
 import { authenticate, authorizeAdmin, authorizeOps } from '../middleware/auth';
 import { uploadCertification, uploadProfilePic } from '../middleware/upload';
+import { authLimiter, strictLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 const authController = new AuthController();
 const onboardingController = new OnboardingController();
 
-// Public routes
-router.post('/register', authController.register);
-router.post('/login', authController.login);
-router.post('/forgot-password', authController.forgotPassword);
-router.post('/reset-password', authController.resetPassword);
-router.post('/send-otp', authController.sendOtp);
-router.post('/verify-otp', authController.verifyOtp);
+// Public routes (rate limited)
+router.post('/register', authLimiter, authController.register);
+router.post('/login', authLimiter, authController.login);
+router.post('/forgot-password', strictLimiter, authController.forgotPassword);
+router.post('/reset-password', strictLimiter, authController.resetPassword);
+router.post('/send-otp', authLimiter, authController.sendOtp);
+router.post('/verify-otp', authLimiter, authController.verifyOtp);
 
 // Account deletion request (public)
 router.post('/request-account-deletion', AccountDeletionController.requestAccountDeletion);
@@ -37,9 +38,9 @@ router.post('/accept-invite', authController.acceptInviteCode);
 // Worker passwordless auth (mobile app)
 router.post('/worker/validate-invite', authController.validateWorkerInvite);
 router.post('/worker/register', authController.workerRegister);
-router.post('/worker/login', authController.workerLogin);
-router.post('/worker/password-login', authController.workerPasswordLogin);
-router.post('/worker/verify-otp', authController.workerVerifyOtp);
+router.post('/worker/login', authLimiter, authController.workerLogin);
+router.post('/worker/password-login', authLimiter, authController.workerPasswordLogin);
+router.post('/worker/verify-otp', authLimiter, authController.workerVerifyOtp);
 router.post('/worker/invite', authenticate, authorizeOps, onboardingController.inviteWorker);
 
 // Worker profile save (onboarding Step 1)
