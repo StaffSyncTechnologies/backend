@@ -45,10 +45,6 @@ app.use(cors({
 }));
 app.use(morgan('dev'));
 
-// API key validation & global rate limiting
-app.use(validateApiKey);
-app.use(globalLimiter);
-
 // Webhook route must be before express.json() to get raw body
 import { webhookRouter } from './routes/subscription.routes';
 app.use('/api/v1/subscriptions', webhookRouter);
@@ -104,7 +100,7 @@ app.post('/api/v1/shifts/:shiftId/accept-email', shiftController.acceptShiftByEm
 app.post('/api/v1/shifts/:shiftId/reject-email', shiftController.rejectShiftByEmail);
 
 // API Routes
-app.use('/api/v1', routes);
+app.use('/api/v1', validateApiKey, globalLimiter, routes);
 
 // Error handling
 app.use(notFoundHandler);
