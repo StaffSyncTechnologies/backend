@@ -45,6 +45,27 @@ app.use(cors({
 }));
 app.use(morgan('dev'));
 
+// API key validation & global rate limiting (but skip webhooks and email routes)
+app.use((req, res, next) => {
+  // Skip API key for webhook routes
+  if (req.path.startsWith('/api/v1/subscriptions/webhook')) {
+    return next();
+  }
+  // Skip API key for email routes (for email links)
+  if (req.path.includes('/shifts/') && req.path.includes('/accept-email')) {
+    return next();
+  }
+  if (req.path.includes('/shifts/') && req.path.includes('/reject-email')) {
+    return next();
+  }
+  // Apply API key validation to all other /api/v1 routes
+  if (req.path.startsWith('/api/v1')) {
+    return validateApiKey(req, res, next);
+  }
+  next();
+});
+app.use(globalLimiter);
+
 // Webhook route must be before express.json() to get raw body
 import { webhookRouter } from './routes/subscription.routes';
 app.use('/api/v1/subscriptions', webhookRouter);
@@ -92,15 +113,14 @@ app.get('/debug/email-test', async (_req, res) => {
   }
 });
 
-// Public email routes (no authentication required)
+// Public email routes (no authentication required - for email links)
 import { ShiftController } from './controllers/shift.controller';
 const shiftController = new ShiftController();
-
 app.post('/api/v1/shifts/:shiftId/accept-email', shiftController.acceptShiftByEmail);
 app.post('/api/v1/shifts/:shiftId/reject-email', shiftController.rejectShiftByEmail);
 
 // API Routes
-app.use('/api/v1', validateApiKey, globalLimiter, routes);
+app.use('/api/v1', routes);
 
 // Error handling
 app.use(notFoundHandler);
