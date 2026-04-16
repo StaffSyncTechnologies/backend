@@ -1,11 +1,11 @@
 import rateLimit from 'express-rate-limit';
 
 /**
- * Global rate limiter — 100 requests per 15 minutes per IP
+ * Global rate limiter — 1000 requests per 15 minutes per IP (increased for development)
  */
 export const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: process.env.NODE_ENV === 'development' ? 1000 : 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: 'Too many requests, please try again later.' },
