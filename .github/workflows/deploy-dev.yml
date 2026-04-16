@@ -20,6 +20,7 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+
       - name: Deploy to Droplet
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -31,10 +32,7 @@ jobs:
             git pull origin dev
 
             cat > .env << EOF
-            NODE_ENV=development
-            PORT=3001
-            DATABASE_URL=${{ secrets.DEV_DATABASE_URL }}
-            JWT_SECRET=${{ secrets.DEV_JWT_SECRET }}
+            ${{ secrets.DEV_ENV_FILE }}
             EOF
 
             npm install
