@@ -27,7 +27,7 @@ npm-debug.log*
 Thumbs.db
 
 # Uploads
-
+uploads/
 
 # Prisma
 prisma/migrations/
