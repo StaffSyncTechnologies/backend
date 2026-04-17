@@ -1391,4 +1391,166 @@ export class AttendanceController {
     res.setHeader('Content-Disposition', `attachment; filename=timesheets-${new Date().toISOString().split('T')[0]}.xlsx`);
     res.send(buffer);
   };
+
+  /**
+   * Get worker's own weekly timesheet
+   * GET /api/attendance/my-timesheet
+   * Query: weekStart (ISO date string, defaults to current week Monday)
+   */
+  getMyTimesheet = async (req: AuthRequest, res: Response) => {
+    const workerId = req.user!.id;
+    const now = new Date();
+
+    // Calculate week boundaries
+    let weekStart: Date;
+    if (req.query.weekStart) {
+      weekStart = new Date(req.query.weekStart as string);
+      weekStart.setHours(0, 0, 0, 0);
+    } else {
+      weekStart = new Date(now);
+      const day = weekStart.getDay();
+      const diff = weekStart.getDate() - day + (day === 0 ? -6 : 1);
+      weekStart.setDate(diff);
+      weekStart.setHours(0, 0, 0, 0);
+    }
+
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
+
+    // Get all attendance records for this week
+    const attendances = await prisma.attendance.findMany({
+      where: {
+        workerId,
+        shift: {
+          startAt: { gte: weekStart, lte: weekEnd },
+        },
+      },
+      include: {
+        shift: {
+          select: {
+            id: true,
+            title: true,
+            startAt: true,
+            endAt: true,
+            siteLocation: true,
+            hourlyRate: true,
+            breakMinutes: true,
+            clientCompany: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: { shift: { startAt: 'asc' } },
+    });
+
+    // Also get shifts assigned this week that may not have attendance yet
+    const assignments = await prisma.shiftAssignment.findMany({
+      where: {
+        workerId,
+        status: { in: ['ASSIGNED', 'ACCEPTED'] },
+        shift: {
+          startAt: { gte: weekStart, lte: weekEnd },
+        },
+      },
+      include: {
+        shift: {
+          select: {
+            id: true,
+            title: true,
+            startAt: true,
+            endAt: true,
+            siteLocation: true,
+            hourlyRate: true,
+            breakMinutes: true,
+            clientCompany: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: { shift: { startAt: 'asc' } },
+    });
+
+    // Build day-by-day entries (Mon=0 to Sun=6)
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const days = dayNames.map((name, i) => {
+      const date = new Date(weekStart);
+      date.setDate(weekStart.getDate() + i);
+
+      // Find attendance records for this day
+      const dayAttendances = attendances.filter((a) => {
+        const shiftDate = new Date(a.shift.startAt);
+        return shiftDate.toDateString() === date.toDateString();
+      });
+
+      // Find assigned shifts for this day (including those without attendance)
+      const dayAssignments = assignments.filter((a) => {
+        const shiftDate = new Date(a.shift.startAt);
+        return shiftDate.toDateString() === date.toDateString();
+      });
+
+      // Merge: prefer attendance data, fall back to assignment data
+      const entries = dayAssignments.map((assignment) => {
+        const attendance = dayAttendances.find((a) => a.shiftId === assignment.shiftId);
+        return {
+          shiftId: assignment.shift.id,
+          shiftTitle: assignment.shift.title,
+          location: assignment.shift.siteLocation,
+          client: assignment.shift.clientCompany?.name || null,
+          scheduledStart: assignment.shift.startAt,
+          scheduledEnd: assignment.shift.endAt,
+          hourlyRate: assignment.shift.hourlyRate ? Number(assignment.shift.hourlyRate) : null,
+          breakMinutes: assignment.shift.breakMinutes,
+          clockInAt: attendance?.clockInAt || null,
+          clockOutAt: attendance?.clockOutAt || null,
+          hoursWorked: attendance?.hoursWorked ? Number(attendance.hoursWorked) : null,
+          status: attendance
+            ? attendance.status
+            : date > now
+              ? 'UPCOMING'
+              : 'MISSED',
+          flagReason: attendance?.flagReason || null,
+          geofenceValid: attendance?.geofenceValid ?? null,
+        };
+      });
+
+      const dayHours = entries.reduce((sum, e) => sum + (e.hoursWorked || 0), 0);
+      const dayEarnings = entries.reduce((sum, e) => {
+        const hours = e.hoursWorked || 0;
+        const rate = e.hourlyRate || 0;
+        return sum + hours * rate;
+      }, 0);
+
+      return {
+        dayName: name,
+        date: date.toISOString().split('T')[0],
+        isToday: date.toDateString() === now.toDateString(),
+        entries,
+        totalHours: Math.round(dayHours * 100) / 100,
+        totalEarnings: Math.round(dayEarnings * 100) / 100,
+      };
+    });
+
+    // Summary
+    const totalHours = days.reduce((sum, d) => sum + d.totalHours, 0);
+    const totalEarnings = days.reduce((sum, d) => sum + d.totalEarnings, 0);
+    const shiftsWorked = attendances.filter((a) => a.clockOutAt).length;
+    const shiftsScheduled = assignments.length;
+    const approvedCount = attendances.filter((a) => a.status === 'APPROVED').length;
+    const pendingCount = attendances.filter((a) => a.status === 'PENDING').length;
+    const flaggedCount = attendances.filter((a) => a.status === 'FLAGGED').length;
+
+    ApiResponse.ok(res, 'Worker timesheet', {
+      weekStart: weekStart.toISOString().split('T')[0],
+      weekEnd: weekEnd.toISOString().split('T')[0],
+      summary: {
+        totalHours: Math.round(totalHours * 100) / 100,
+        totalEarnings: Math.round(totalEarnings * 100) / 100,
+        shiftsWorked,
+        shiftsScheduled,
+        approved: approvedCount,
+        pending: pendingCount,
+        flagged: flaggedCount,
+      },
+      days,
+    });
+  };
 }

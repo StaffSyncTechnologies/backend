@@ -14,6 +14,7 @@ router.post('/:shiftId/clock-out', controller.clockOut);
 // Worker status and history
 router.get('/my-status', controller.getMyStatus);
 router.get('/my-history', controller.getMyHistory);
+router.get('/my-timesheet', controller.getMyTimesheet);
 
 // Manager/Ops views
 router.get('/timesheet/daily', controller.getDailyTimesheet);
