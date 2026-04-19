@@ -6,7 +6,7 @@
  */
 
 import { prisma } from '../lib/prisma';
-import { SubscriptionNotificationService } from './notifications/subscription.notification';
+import { EnhancedSubscriptionNotificationService } from './notifications/subscription-notification-enhanced';
 
 export class SubscriptionChecker {
   /**
@@ -59,11 +59,19 @@ export class SubscriptionChecker {
 
     for (const trial of expiringTrials) {
       try {
-        await SubscriptionNotificationService.notifyTrialEndingSoon(
-          trial.organizationId,
-          daysRemaining,
-          trial.trialEnd!
-        );
+        if (daysRemaining === 30) {
+          await EnhancedSubscriptionNotificationService.notifyTrialEndingSoon30(
+            trial.organizationId,
+            daysRemaining,
+            trial.trialEnd!
+          );
+        } else {
+          await EnhancedSubscriptionNotificationService.notifyTrialEndingSoon5(
+            trial.organizationId,
+            daysRemaining,
+            trial.trialEnd!
+          );
+        }
         console.log(`[SubscriptionChecker] Sent ${daysRemaining}-day reminder to org ${trial.organizationId}`);
       } catch (error) {
         console.error(`[SubscriptionChecker] Failed to notify org ${trial.organizationId}:`, error);
@@ -99,7 +107,7 @@ export class SubscriptionChecker {
         });
 
         // Send expiry notification
-        await SubscriptionNotificationService.notifyTrialExpired(trial.organizationId);
+        await EnhancedSubscriptionNotificationService.notifyTrialExpired(trial.organizationId);
         console.log(`[SubscriptionChecker] Marked trial as expired for org ${trial.organizationId}`);
       } catch (error) {
         console.error(`[SubscriptionChecker] Failed to expire trial for org ${trial.organizationId}:`, error);
@@ -135,7 +143,7 @@ export class SubscriptionChecker {
 
     for (const sub of expiringSubscriptions) {
       try {
-        await SubscriptionNotificationService.notifyTrialEndingSoon(
+        await EnhancedSubscriptionNotificationService.notifyTrialEndingSoon5(
           sub.organizationId,
           daysRemaining,
           sub.currentPeriodEnd!

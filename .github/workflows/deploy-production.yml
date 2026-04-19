@@ -33,9 +33,17 @@ jobs:
             git pull origin dev
             
             cat > .env << 'ENVEOF'
-            ${{ secrets.DEV_ENV_FILE }}
+            ${{ secrets.DEV_PROD_FILE }}
             ENVEOF
             npm install
             npx prisma generate
             npm run db:migrate:deploy
-            pm2 restart staffsync-backend || pm2 start ecosystem.config.js
+            
+            # Create logs directory if it doesn't exist
+            mkdir -p logs
+            
+            # Restart both PM2 apps
+            pm2 restart all || pm2 start ecosystem.config.js
+            
+            # Save PM2 configuration
+            pm2 save
